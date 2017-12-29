@@ -2,15 +2,29 @@
 <meta charset="utf-8">
 <style>
 
-.chart line.type-line {
-  stroke: black;
-  stroke-width: 1px;
-}
-
-.chart text {
+.chart .x-axis text {
   fill: black;
   font: 10px sans-serif;
-  text-anchor: middle;
+  text-anchor: start;
+  transform: rotate(-8deg);
+}
+
+.chart .axis .domain {
+  display: none;
+}
+
+.chart .y-axis .tick > line {
+  opacity: 0.1;
+}
+
+.chart .data-area .log-entry rect {
+  fill: white;
+  stroke: black;
+}
+
+.chart .data-area .log-entry path.duration {
+  stroke: black;
+  stroke-width: 2px;
 }
 
 </style>
@@ -18,7 +32,28 @@
 <script src="https://d3js.org/d3.v4.js" charset="utf-8"></script>
 <script src="log_data.jsonp" charset="utf-8"></script>
 <script>
-var data = window.log_data.hits.hits;
+var logentry_get_duration = function (log_entry) {
+  if (log_entry._source.requestTime != null) {
+    return log_entry._source.requestTime * 1000;
+  }
+  if (log_entry._source.api_time != null) {
+    return log_entry._source.api_time * 1000;
+  }
+  return null;
+};
+
+var logentry_get_start_time = function (log_entry) {
+  var duration = logentry_get_duration(log_entry);
+  return duration && log_entry.fields["@timestamp"][0] - duration;
+};
+
+var logentry_get_earliest_time = function (log_entry) {
+  return logentry_get_start_time(log_entry) || log_entry.fields["@timestamp"][0];
+};
+
+var data = window.log_data.hits.hits.sort(function(a, b) {
+  return logentry_get_earliest_time(a) - logentry_get_earliest_time(b);
+});
 var data_by_type = d3.nest().key(function(log_entry) { return log_entry._type; }).entries(data);
 
 var margin = {top: 32, right: 32, bottom: 32, left: 32};
@@ -28,39 +63,56 @@ var outer_width = inner_width + margin.left + margin.right;
 var outer_height = 500;
 var inner_height = outer_height - (margin.top + margin.bottom);
 
-var y_scale = d3.scaleLinear()
-  .domain(d3.extent(data, function(log_entry) { return log_entry.fields["@timestamp"][0]}))
-  .range([0, inner_height]);
+var y_scale = d3.scaleTime()
+  .domain([
+    d3.min(data, function(log_entry) { return logentry_get_earliest_time(log_entry)}),
+    d3.max(data, function(log_entry) { return log_entry.fields["@timestamp"][0]})
+  ]).range([0, inner_height]);
+var y_axis = d3.axisLeft(y_scale)
+  .tickSize(-inner_width);
 
-var x_scale = d3.scaleOrdinal(data_by_type.map(function(d, i) { return i * type_width; }))
+var x_scale = d3.scaleOrdinal(data_by_type.map(function(d, i) { return (i+0.5) * type_width; }))
   .domain(data_by_type.map(function(d, i) { return d.key; }));
+var x_axis = d3.axisTop(x_scale)
+  .tickSize(-inner_height);
 
 var chart = d3.select(".chart")
-    .attr("width", outer_width)
-    .attr("height", outer_height)
-  .append("g")
-    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+  .attr("width", outer_width)
+  .attr("height", outer_height);
+var chart_inner = chart.append("g")
+  .attr("class", "chart-inner")
+  .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+var chart_x_axis = chart_inner.append("g")
+  .attr("class", "axis x-axis")
+  .call(x_axis);
+var chart_y_axis = chart_inner.append("g")
+  .attr("class", "axis y-axis")
+  .call(y_axis);
+var chart_data_area = chart_inner.append("g")
+  .attr("class", "data-area");
 
-var type_line_g = chart.selectAll("g").data(data_by_type, function(type_group) { return type_group.key; });
-var type_line_g_enter = type_line_g.enter().append("g").attr("transform", function(d) { return "translate(" + x_scale(d.key) + ", 0)"; });
+var type_line_g = chart_data_area.selectAll("g").data(data_by_type, function(type_group) { return type_group.key; });
+var type_line_g_enter = type_line_g.enter().append("g")
+  .attr("transform", function(d) { return "translate(" + x_scale(d.key) + ", 0)"; })
+  .attr("class", "type-group");
 
-type_line_g_enter.append("line")
-  .attr("class", "type-line")
-  .attr("x1", 0)
-  .attr("y1", 0)
-  .attr("x2", 0)
-  .attr("y2", inner_height)
-  .text(function(d) { return d.key; });
-
-var log_entry_g = chart.selectAll("g").selectAll("g").data(
+var log_entry_g = chart_data_area.selectAll("g").selectAll("g").data(
   function(parent_datum) { return parent_datum.values; },
   function(log_entry) { return log_entry._id; }
 );
-var log_entry_g_enter = log_entry_g.enter().append("g").attr("transform", function(d, i) { return "translate(0, " + y_scale(d.fields["@timestamp"]) + ")"; });
+var log_entry_g_enter = log_entry_g.enter().append("g")
+  .attr("class", "log-entry")
+  .attr("transform", function(d, i) { return "translate(0, " + y_scale(d.fields["@timestamp"]) + ")"; });
 
-log_entry_g_enter.append("circle")
-  .attr("cx", 0)
-  .attr("cy", 0)
-  .attr("r", 4);
+log_entry_g_enter.append("rect")
+  .attr("x", -16)
+  .attr("y", 0)
+  .attr("width", 32)
+  .attr("height", 8);
+
+log_entry_g_enter.filter(function(d) { return logentry_get_duration(d); }).append("path")
+  .attr("d", function(d) {
+    return "M0,0v" + (y_scale(logentry_get_start_time(d)) - y_scale(d.fields["@timestamp"])) + "m-4,0h8";
+  }).attr("class", "duration");
 
 </script>
