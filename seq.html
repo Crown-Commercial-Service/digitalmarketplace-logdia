@@ -52,7 +52,7 @@ var logentry_get_earliest_time = function (log_entry) {
 };
 
 var data = window.log_data.hits.hits.sort(function(a, b) {
-  return logentry_get_earliest_time(a) - logentry_get_earliest_time(b);
+  return b.fields["@timestamp"][0] - a.fields["@timestamp"][0];
 });
 var data_by_type = d3.nest().key(function(log_entry) { return log_entry._type; }).entries(data);
 
@@ -93,26 +93,47 @@ var chart_data_area = chart_inner.append("g")
 
 var type_line_g = chart_data_area.selectAll("g").data(data_by_type, function(type_group) { return type_group.key; });
 var type_line_g_enter = type_line_g.enter().append("g")
-  .attr("transform", function(d) { return "translate(" + x_scale(d.key) + ", 0)"; })
-  .attr("class", "type-group");
+  .attr("class", "type-group")
+  .merge(type_line_g)
+    .attr("transform", function(d) { return "translate(" + x_scale(d.key) + ", 0)"; });
 
-var log_entry_g = chart_data_area.selectAll("g").selectAll("g").data(
-  function(parent_datum) { return parent_datum.values; },
+var log_entry_g = chart_data_area.selectAll("g").selectAll("g.log-entry").data(
+  function(parent_datum) {
+    parent_datum.values.forEach(function(log_entry, i) { log_entry._order_in_type = i; });
+    return parent_datum.values;
+  },
   function(log_entry) { return log_entry._id; }
 );
 var log_entry_g_enter = log_entry_g.enter().append("g")
   .attr("class", "log-entry")
-  .attr("transform", function(d, i) { return "translate(0, " + y_scale(d.fields["@timestamp"]) + ")"; });
-
-log_entry_g_enter.append("rect")
+  .on("mouseover", function() { this.parentNode.appendChild(this); })
+  .on("mouseleave", function() {
+    var datum = d3.select(this).datum();
+    var order_in_type = datum._order_in_type;
+    if (order_in_type != null) {
+      this.parentNode.insertBefore(
+        this,
+        order_in_type >= this.parentNode.childNodes.length ? null : this.parentNode.childNodes[order_in_type]
+      );
+    }
+  });
+log_entry_g_enter.append("rect").attr("class", "main-rect")
   .attr("x", -16)
   .attr("y", 0)
   .attr("width", 32)
   .attr("height", 8);
+log_entry_g_enter.append("path").attr("class", "duration");
 
-log_entry_g_enter.filter(function(d) { return logentry_get_duration(d); }).append("path")
-  .attr("d", function(d) {
-    return "M0,0v" + (y_scale(logentry_get_start_time(d)) - y_scale(d.fields["@timestamp"])) + "m-4,0h8";
-  }).attr("class", "duration");
+log_entry_g_enter.merge(log_entry_g)
+  .attr("transform", function(d) { return "translate(0, " + y_scale(d.fields["@timestamp"]) + ")"; })
+  .select("path.duration")
+    .attr("d", "")
+    .filter(function(d) { return logentry_get_duration(d); })
+      .attr("transform", function(d, i, nodes) {
+        return "translate(" + ((Math.ceil((nodes.length-1)/2) - i) * 6) + ", 0)";
+      })
+      .attr("d", function(d) {
+        return "M0,0v" + (y_scale(logentry_get_start_time(d)) - y_scale(d.fields["@timestamp"])) + "m-4,0h8";
+      });
 
 </script>
