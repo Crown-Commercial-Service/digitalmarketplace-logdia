@@ -37,7 +37,7 @@ body > * {
   fill: none;
 }
 
-.chart .data-area .log-entry path.duration {
+.chart .data-area .log-entry .duration line {
   stroke: black;
   stroke-width: 2px;
 }
@@ -181,7 +181,20 @@ var log_entry_g_enter = log_entry_g.enter().append("g")
       );
     }
   });
-log_entry_g_enter.append("path").attr("class", "duration");
+
+var duration_g_enter = log_entry_g_enter.append("g").attr("class", "duration");
+duration_g_enter.append("line")
+  .attr("class", "duration-h")
+  .attr("x1", -4)
+  .attr("y1", 0)
+  .attr("x2", 4)
+  .attr("y2", 0);
+duration_g_enter.append("line")
+  .attr("class", "duration-v")
+  .attr("x1", 0)
+  .attr("y1", 0)
+  .attr("x2", 0);
+
 log_entry_g_enter.append("rect").attr("class", "main-rect-fill")
   .attr("x", -main_rect_width/2)
   .attr("y", 0)
@@ -195,19 +208,24 @@ log_entry_g_enter.append("rect").attr("class", "severity-stripe")
 log_entry_g_enter.append("path").attr("class", "main-rect-stroke")
   .attr("d", "M" + -((6+main_rect_width)/2) + ",0h" + (main_rect_width+6) + "M" + (main_rect_width/2) + ",0v8h" + -main_rect_width + "v-8");
 
+//
+// now we can start performing the combined "updates"
+//
+
 log_entry_g = log_entry_g_enter.merge(log_entry_g);
 log_entry_g.attr("transform", function(d) { return "translate(0, " + y_scale(d._timestamp_ms) + ")"; });
-log_entry_g.select("path.duration")
-  .attr("d", "")
+log_entry_g.select(".duration")
+  .style("display", function(d) { return logentry_get_duration(d) ? "inline" : "none"; })
   .filter(function(d) { return logentry_get_duration(d); })
     .attr("transform", function(d, i, nodes) {
       return "translate(" + (
         (Math.ceil((nodes.length-1)/2) - i) * Math.min(main_rect_width/nodes.length, preferred_duration_spacing)
-      ) + ", 0)";
+      ) + ", " + (y_scale(logentry_get_start_time(d)) - y_scale(d._timestamp_ms)) + ")";
     })
-    .attr("d", function(d) {
-      return "M0,0v" + (y_scale(logentry_get_start_time(d)) - y_scale(d._timestamp_ms)) + "m-4,0h8";
-    });
+    .select(".duration-v")
+      .attr("y2", function(d) {
+        return y_scale(d._timestamp_ms) - y_scale(logentry_get_start_time(d));
+      });
 log_entry_g.select(".severity-stripe")
   .attr("fill", function(d) {
     return {
