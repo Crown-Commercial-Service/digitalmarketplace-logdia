@@ -17,9 +17,16 @@
   opacity: 0.1;
 }
 
-.chart .data-area .log-entry rect {
+.chart .data-area .log-entry .main-rect-fill {
   fill: white;
+}
+
+.chart .data-area .log-entry .main-rect-stroke {
   stroke: black;
+  stroke-width: 1px;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
+  fill: none;
 }
 
 .chart .data-area .log-entry path.duration {
@@ -56,15 +63,20 @@ var type_sort_key = function (type_string) {
 
 var logentry_get_start_time = function (log_entry) {
   var duration = logentry_get_duration(log_entry);
-  return duration && log_entry.fields["@timestamp"][0] - duration;
+  return duration && log_entry._timestamp_ms - duration;
 };
 
 var logentry_get_earliest_time = function (log_entry) {
-  return logentry_get_start_time(log_entry) || log_entry.fields["@timestamp"][0];
+  return logentry_get_start_time(log_entry) || log_entry._timestamp_ms;
 };
 
-var data = window.log_data.hits.hits.sort(function(a, b) {
-  return b.fields["@timestamp"][0] - a.fields["@timestamp"][0];
+
+var data = window.log_data.hits.hits;
+data.forEach(function (log_entry) {
+  log_entry["_timestamp_ms"] = (new Date(log_entry._source["@timestamp"])).getTime();
+});
+data.sort(function(a, b) {
+  return b._timestamp_ms - a._timestamp_ms;
 });
 var data_by_type = d3.nest().key(function(log_entry) { return log_entry._type; }).entries(data);
 
@@ -86,11 +98,13 @@ var inner_width = type_width * data_by_type.length;
 var outer_width = inner_width + margin.left + margin.right;
 var outer_height = 500;
 var inner_height = outer_height - (margin.top + margin.bottom);
+var preferred_duration_spacing = 6;
+var main_rect_width = 32;
 
 var y_scale = d3.scaleTime()
   .domain([
     d3.min(data, function(log_entry) { return logentry_get_earliest_time(log_entry)}),
-    d3.max(data, function(log_entry) { return log_entry.fields["@timestamp"][0]})
+    d3.max(data, function(log_entry) { return log_entry._timestamp_ms})
   ]).range([0, inner_height]);
 var y_axis = d3.axisLeft(y_scale)
   .tickSize(-inner_width);
@@ -141,23 +155,40 @@ var log_entry_g_enter = log_entry_g.enter().append("g")
       );
     }
   });
-log_entry_g_enter.append("rect").attr("class", "main-rect")
-  .attr("x", -16)
-  .attr("y", 0)
-  .attr("width", 32)
-  .attr("height", 8);
 log_entry_g_enter.append("path").attr("class", "duration");
+log_entry_g_enter.append("rect").attr("class", "main-rect-fill")
+  .attr("x", -main_rect_width/2)
+  .attr("y", 0)
+  .attr("width", main_rect_width)
+  .attr("height", 8);
+log_entry_g_enter.append("rect").attr("class", "severity-stripe")
+  .attr("x", -main_rect_width/2)
+  .attr("y", 0)
+  .attr("width", 6)
+  .attr("height", 8);
+log_entry_g_enter.append("path").attr("class", "main-rect-stroke")
+  .attr("d", "M" + -((6+main_rect_width)/2) + ",0h" + (main_rect_width+6) + "M" + (main_rect_width/2) + ",0v8h" + -main_rect_width + "v-8");
 
-log_entry_g_enter.merge(log_entry_g)
-  .attr("transform", function(d) { return "translate(0, " + y_scale(d.fields["@timestamp"]) + ")"; })
-  .select("path.duration")
-    .attr("d", "")
-    .filter(function(d) { return logentry_get_duration(d); })
-      .attr("transform", function(d, i, nodes) {
-        return "translate(" + ((Math.ceil((nodes.length-1)/2) - i) * 6) + ", 0)";
-      })
-      .attr("d", function(d) {
-        return "M0,0v" + (y_scale(logentry_get_start_time(d)) - y_scale(d.fields["@timestamp"])) + "m-4,0h8";
-      });
+log_entry_g = log_entry_g_enter.merge(log_entry_g);
+log_entry_g.attr("transform", function(d) { return "translate(0, " + y_scale(d._timestamp_ms) + ")"; });
+log_entry_g.select("path.duration")
+  .attr("d", "")
+  .filter(function(d) { return logentry_get_duration(d); })
+    .attr("transform", function(d, i, nodes) {
+      return "translate(" + (
+        (Math.ceil((nodes.length-1)/2) - i) * Math.min(main_rect_width/nodes.length, preferred_duration_spacing)
+      ) + ", 0)";
+    })
+    .attr("d", function(d) {
+      return "M0,0v" + (y_scale(logentry_get_start_time(d)) - y_scale(d._timestamp_ms)) + "m-4,0h8";
+    });
+log_entry_g.select(".severity-stripe")
+  .attr("fill", function(d) {
+    return {
+      "DEBUG": "#cccccc",
+      "WARNING": "orange",
+      "ERROR": "red"
+    }[d._source.levelname] || "white";
+  });
 
 </script>
