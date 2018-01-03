@@ -2,6 +2,14 @@
 <meta charset="utf-8">
 <style>
 
+body {
+  line-height: 0;
+}
+
+body > * {
+  line-height: 1.2em;
+}
+
 .chart .x-axis text {
   fill: black;
   font: 10px sans-serif;
@@ -34,7 +42,19 @@
   stroke-width: 2px;
 }
 
+.detail {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0 4px;
+  padding: 8px;
+  border: 1px solid black;
+  box-sizing: border-box;
+  border-radius: 3px;
+}
+
 </style>
+<body>
 <svg class="chart"></svg>
 <script src="https://d3js.org/d3.v4.js" charset="utf-8"></script>
 <script src="log_data.jsonp" charset="utf-8"></script>
@@ -144,10 +164,16 @@ var log_entry_g = chart_data_area.selectAll("g").selectAll("g.log-entry").data(
 );
 var log_entry_g_enter = log_entry_g.enter().append("g")
   .attr("class", "log-entry")
-  .on("mouseover", function() { this.parentNode.appendChild(this); })
+  .on("mouseover", function() {
+    this.parentNode.appendChild(this);
+    var detail = d3.select("body").selectAll("pre.detail").data([d3.select(this).datum()]);
+    var detail_enter = detail.enter().append("pre").attr("class", "detail");
+    detail = detail_enter.merge(detail);
+    detail.text(function(d) { return JSON.stringify(d._source, null, 2); })
+      .style("width", (outer_width-8) + "px");
+  })
   .on("mouseleave", function() {
-    var datum = d3.select(this).datum();
-    var order_in_type = datum._order_in_type;
+    var order_in_type = d3.select(this).datum()._order_in_type;
     if (order_in_type != null) {
       this.parentNode.insertBefore(
         this,
@@ -188,7 +214,8 @@ log_entry_g.select(".severity-stripe")
       "DEBUG": "#cccccc",
       "WARNING": "orange",
       "ERROR": "red"
-    }[d._source.levelname] || "white";
+    }[d._source.levelname] || "transparent";
   });
 
 </script>
+</body>
