@@ -10,19 +10,33 @@ body > * {
   line-height: 1.2em;
 }
 
-.chart .x-axis text {
+.chart-container {
+  overflow-y: auto;
+  overflow-x: hidden;
+  line-height: 0;
+}
+
+.chart_container > * {
+  line-height: 1.2em;
+}
+
+.legend .x-axis text {
   fill: black;
   font: 10px sans-serif;
   text-anchor: start;
   transform: rotate(-8deg);
 }
 
-.chart .axis .domain {
+.axis .domain {
   display: none;
 }
 
 .chart .y-axis .tick > line {
   opacity: 0.1;
+}
+
+.chart .x-axis text {
+  display: none;
 }
 
 .chart .data-area .log-entry .main-rect-fill {
@@ -55,7 +69,10 @@ body > * {
 
 </style>
 <body>
-<svg class="chart"></svg>
+<svg class="legend"></svg>
+<div class="chart-container">
+  <svg class="chart"></svg>
+</div>
 <script src="https://d3js.org/d3.v4.js" charset="utf-8"></script>
 <script src="log_data.jsonp" charset="utf-8"></script>
 <script>
@@ -112,12 +129,14 @@ data_by_type.sort(function (a, b) {
   }
 });
 
-var margin = {top: 32, right: 32, bottom: 32, left: 32};
+var chart_margin = {top: 2, right: 0, bottom: 10, left: 32};
+var legend_margin = {top: 0, right: 0, bottom: 0, left: 32};
 var type_width = 96;
-var inner_width = type_width * data_by_type.length;
-var outer_width = inner_width + margin.left + margin.right;
-var outer_height = 500;
-var inner_height = outer_height - (margin.top + margin.bottom);
+var get_inner_width = function() { return type_width * data_by_type.length };
+var get_outer_width = function() { return get_inner_width() + chart_margin.left + chart_margin.right };
+var chart_container_height = 500;
+var chart_height = 500;
+var get_inner_height = function() { return chart_height - (chart_margin.top + chart_margin.bottom) };
 var preferred_duration_spacing = 6;
 var main_rect_width = 32;
 
@@ -125,52 +144,59 @@ var y_scale = d3.scaleTime()
   .domain([
     d3.min(data, function(log_entry) { return logentry_get_earliest_time(log_entry)}),
     d3.max(data, function(log_entry) { return log_entry._timestamp_ms})
-  ]).range([0, inner_height]);
+  ]).range([0, get_inner_height()]);
 var y_axis = d3.axisLeft(y_scale)
-  .tickSize(-inner_width);
+  .ticks(chart_height/50)
+  .tickSize(-get_inner_width());
 
 var x_scale = d3.scaleOrdinal(data_by_type.map(function(d, i) { return (i+0.5) * type_width; }))
   .domain(data_by_type.map(function(d, i) { return d.key; }));
-var x_axis = d3.axisTop(x_scale)
-  .tickSize(-inner_height);
+var x_axis_inner = d3.axisTop(x_scale).tickSize(-get_inner_height());
+var x_axis_outer = d3.axisTop(x_scale).tickSize(0);
 
-var chart = d3.select(".chart")
-  .attr("width", outer_width)
-  .attr("height", outer_height);
+var chart_container = d3.select(".chart-container")
+  .style("height", chart_container_height + "px")
+  .style("width", get_outer_width() + "px");
+
+var chart = d3.select(".chart");
 var chart_inner = chart.append("g")
   .attr("class", "chart-inner")
-  .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+  .attr("transform", "translate(" + chart_margin.left + " " + chart_margin.top + ")");
 var chart_x_axis = chart_inner.append("g")
-  .attr("class", "axis x-axis")
-  .call(x_axis);
+  .attr("class", "axis x-axis");
 var chart_y_axis = chart_inner.append("g")
-  .attr("class", "axis y-axis")
-  .call(y_axis);
+  .attr("class", "axis y-axis");
 var chart_data_area = chart_inner.append("g")
   .attr("class", "data-area");
 
-var type_line_g = chart_data_area.selectAll("g").data(data_by_type, function(type_group) { return type_group.key; });
-var type_line_g_enter = type_line_g.enter().append("g")
-  .attr("class", "type-group")
-  .merge(type_line_g)
-    .attr("transform", function(d) { return "translate(" + x_scale(d.key) + ", 0)"; });
+var legend = d3.select(".legend")
+  .attr("width", get_outer_width())
+  .attr("height", 32);
+var legend_inner = legend.append("g")
+  .attr("class", "chart-inner")
+  .attr("transform", "translate(" + legend_margin.left + " " + 32 + ")");
+var legend_x_axis = legend_inner.append("g")
+  .attr("class", "axis x-axis");
 
-var log_entry_g = chart_data_area.selectAll("g").selectAll("g.log-entry").data(
+chart_data_area.selectAll("g").data(data_by_type, function(type_group) { return type_group.key; }).enter().append("g")
+  .attr("class", "type-group");
+
+var log_entry_g_enter = chart_data_area.selectAll("g").selectAll("g.log-entry").data(
   function(parent_datum) {
     parent_datum.values.forEach(function(log_entry, i) { log_entry._order_in_type = i; });
     return parent_datum.values;
   },
   function(log_entry) { return log_entry._id; }
-);
-var log_entry_g_enter = log_entry_g.enter().append("g")
+).enter().append("g")
   .attr("class", "log-entry")
   .on("mouseover", function() {
     this.parentNode.appendChild(this);
+
     var detail = d3.select("body").selectAll("pre.detail").data([d3.select(this).datum()]);
     var detail_enter = detail.enter().append("pre").attr("class", "detail");
     detail = detail_enter.merge(detail);
     detail.text(function(d) { return JSON.stringify(d._source, null, 2); })
-      .style("width", (outer_width-8) + "px");
+      .style("width", (get_outer_width()-8) + "px");
   })
   .on("mouseleave", function() {
     var order_in_type = d3.select(this).datum()._order_in_type;
@@ -208,32 +234,50 @@ log_entry_g_enter.append("rect").attr("class", "severity-stripe")
 log_entry_g_enter.append("path").attr("class", "main-rect-stroke")
   .attr("d", "M" + -((6+main_rect_width)/2) + ",0h" + (main_rect_width+6) + "M" + (main_rect_width/2) + ",0v8h" + -main_rect_width + "v-8");
 
-//
-// now we can start performing the combined "updates"
-//
+chart.on("wheel", function() {
+  if (d3.event.ctrlKey) {
+    d3.event.preventDefault();
+    chart_height = chart_height * Math.pow(2, d3.event.deltaY/3); 
+    y_scale.range([0, get_inner_height()]);
+    perform_updates();
+  }
+});
 
-log_entry_g = log_entry_g_enter.merge(log_entry_g);
-log_entry_g.attr("transform", function(d) { return "translate(0, " + y_scale(d._timestamp_ms) + ")"; });
-log_entry_g.select(".duration")
-  .style("display", function(d) { return logentry_get_duration(d) ? "inline" : "none"; })
-  .filter(function(d) { return logentry_get_duration(d); })
-    .attr("transform", function(d, i, nodes) {
-      return "translate(" + (
-        (Math.ceil((nodes.length-1)/2) - i) * Math.min(main_rect_width/nodes.length, preferred_duration_spacing)
-      ) + ", " + (y_scale(logentry_get_start_time(d)) - y_scale(d._timestamp_ms)) + ")";
-    })
-    .select(".duration-v")
-      .attr("y2", function(d) {
-        return y_scale(d._timestamp_ms) - y_scale(logentry_get_start_time(d));
-      });
-log_entry_g.select(".severity-stripe")
-  .attr("fill", function(d) {
-    return {
-      "DEBUG": "#cccccc",
-      "WARNING": "orange",
-      "ERROR": "red"
-    }[d._source.levelname] || "transparent";
-  });
+var perform_updates = function (type_line_g, log_entry_g) {
+  var type_line_g = type_line_g || chart_data_area.selectAll("g.type-group");
+  // remembering to do this nested select to get our grouping behaviour
+  var log_entry_g = log_entry_g || chart_data_area.selectAll("g.type-group").selectAll("g.log-entry");
+
+  chart.attr("width", get_outer_width()).attr("height", chart_height);
+  chart_x_axis.call(x_axis_inner);
+  legend_x_axis.call(x_axis_outer);
+  chart_y_axis.call(y_axis);
+
+  type_line_g.attr("transform", function(d) { return "translate(" + x_scale(d.key) + ", 0)"; });
+
+  log_entry_g.attr("transform", function(d) { return "translate(0, " + y_scale(d._timestamp_ms) + ")"; });
+  log_entry_g.select(".duration")
+    .style("display", function(d) { return logentry_get_duration(d) ? "inline" : "none"; })
+    .filter(function(d) { return logentry_get_duration(d); })
+      .attr("transform", function(d, i, nodes) {
+        return "translate(" + (
+          (Math.ceil((nodes.length-1)/2) - i) * Math.min(main_rect_width/nodes.length, preferred_duration_spacing)
+        ) + ", " + (y_scale(logentry_get_start_time(d)) - y_scale(d._timestamp_ms)) + ")";
+      })
+      .select(".duration-v")
+        .attr("y2", function(d) {
+          return y_scale(d._timestamp_ms) - y_scale(logentry_get_start_time(d));
+        });
+  log_entry_g.select(".severity-stripe")
+    .attr("fill", function(d) {
+      return {
+        "DEBUG": "#cccccc",
+        "WARNING": "orange",
+        "ERROR": "red"
+      }[d._source.levelname] || "transparent";
+    });
+};
+perform_updates();
 
 </script>
 </body>
