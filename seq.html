@@ -133,6 +133,12 @@ var logentry_get_earliest_time = function (log_entry) {
   return logentry_get_start_time(log_entry) || log_entry._timestamp_ms;
 };
 
+var transform_to_style = function (selection) {
+  selection.filter("[transform]").style("transform", function() {
+    return this.attributes.transform.value.replace(/([0-9.])\s*\,/, "$1px,").replace(/([0-9.])\s*\)/, "$1px)");
+  }).attr("transform", null);
+};
+
 var data;
 var data_by_type;
 var chart_margin = {top: 2, right: 0, bottom: 10, left: 32};
@@ -312,8 +318,11 @@ var zoom_updated = function (type_line_g, log_entry_g) {
   x_axis_inner.tickSize(-get_inner_height());
 
   chart_x_axis.call(x_axis_inner);
+  transform_to_style(chart_x_axis.selectAll(".tick"));
   legend_x_axis.call(x_axis_outer);
+  transform_to_style(legend_x_axis.selectAll(".tick"));
   chart_y_axis.call(y_axis);
+  transform_to_style(chart_y_axis.selectAll(".tick"));
 
   type_line_g.style("transform", function(d) { return "translate(" + x_scale(d.key) + "px, 0px)"; });
 
