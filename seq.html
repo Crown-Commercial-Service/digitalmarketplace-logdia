@@ -39,6 +39,10 @@ body > * {
   display: none;
 }
 
+* {
+  transition: transform 50ms linear;
+}
+
 .chart .data-area .log-entry .main-rect-fill {
   fill: white;
 }
@@ -146,12 +150,11 @@ var y_scale = d3.scaleTime()
     d3.max(data, function(log_entry) { return log_entry._timestamp_ms})
   ]).range([0, get_inner_height()]);
 var y_axis = d3.axisLeft(y_scale)
-  .ticks(chart_height/50)
   .tickSize(-get_inner_width());
 
 var x_scale = d3.scaleOrdinal(data_by_type.map(function(d, i) { return (i+0.5) * type_width; }))
   .domain(data_by_type.map(function(d, i) { return d.key; }));
-var x_axis_inner = d3.axisTop(x_scale).tickSize(-get_inner_height());
+var x_axis_inner = d3.axisTop(x_scale);
 var x_axis_outer = d3.axisTop(x_scale).tickSize(0);
 
 var chart_container = d3.select(".chart-container")
@@ -161,7 +164,7 @@ var chart_container = d3.select(".chart-container")
 var chart = d3.select(".chart");
 var chart_inner = chart.append("g")
   .attr("class", "chart-inner")
-  .attr("transform", "translate(" + chart_margin.left + " " + chart_margin.top + ")");
+  .style("transform", "translate(" + chart_margin.left + "px, " + chart_margin.top + "px)");
 var chart_x_axis = chart_inner.append("g")
   .attr("class", "axis x-axis");
 var chart_y_axis = chart_inner.append("g")
@@ -174,7 +177,7 @@ var legend = d3.select(".legend")
   .attr("height", 32);
 var legend_inner = legend.append("g")
   .attr("class", "chart-inner")
-  .attr("transform", "translate(" + legend_margin.left + " " + 32 + ")");
+  .style("transform", "translate(" + legend_margin.left + "px, " + 32 + "px)");
 var legend_x_axis = legend_inner.append("g")
   .attr("class", "axis x-axis");
 
@@ -237,8 +240,9 @@ log_entry_g_enter.append("path").attr("class", "main-rect-stroke")
 chart.on("wheel", function() {
   if (d3.event.ctrlKey) {
     d3.event.preventDefault();
-    chart_height = chart_height * Math.pow(2, d3.event.deltaY/3); 
-    y_scale.range([0, get_inner_height()]);
+
+    chart_height = Math.min(Math.max(chart_container_height, chart_height * Math.pow(2, -d3.event.deltaY/3)), chart_container_height*16); 
+
     perform_updates();
   }
 });
@@ -248,21 +252,73 @@ var perform_updates = function (type_line_g, log_entry_g) {
   // remembering to do this nested select to get our grouping behaviour
   var log_entry_g = log_entry_g || chart_data_area.selectAll("g.type-group").selectAll("g.log-entry");
 
-  chart.attr("width", get_outer_width()).attr("height", chart_height);
+  chart.attr("width", get_outer_width());
+  // we only want to set the new height before the scroll calculation if it's *greater than* the
+  // existing height. the scroll calculation needs all the headroom available to it
+  chart.attr("height", Math.max(chart_height, parseInt(chart.attr("height")) || 0));
+
+  var y_original_range = y_scale.range();
+  var y_original_range_upper = y_original_range && y_original_range[1];
+  var original_scrollTop = chart_container.node().scrollTop;
+  if (y_original_range_upper !== get_inner_height()) {
+    var fixed_point_px;
+    try {
+      fixed_point_px = d3.mouse(chart_container.node())[1];
+    } catch (e if e instanceof TypeError) {
+      fixed_point_px = chart_container_height/2;
+    }
+    var fixed_point_ts = y_scale.invert(original_scrollTop + fixed_point_px - chart_margin.top);
+
+    y_scale.range([0, get_inner_height()]);
+
+    chart_container.node().scrollTop = y_scale(fixed_point_ts) + chart_margin.top - fixed_point_px;
+  }
+  var scrollTop_delta = chart_container.node().scrollTop - original_scrollTop;
+
+  // now make sure our height is ultimately set to the desired value
+  chart.attr("height", chart_height);
+
+  y_axis.ticks(chart_height/50);
+  x_axis_inner.tickSize(-get_inner_height());
+
   chart_x_axis.call(x_axis_inner);
   legend_x_axis.call(x_axis_outer);
   chart_y_axis.call(y_axis);
 
-  type_line_g.attr("transform", function(d) { return "translate(" + x_scale(d.key) + ", 0)"; });
+  type_line_g.style("transform", function(d) { return "translate(" + x_scale(d.key) + "px, 0px)"; });
 
-  log_entry_g.attr("transform", function(d) { return "translate(0, " + y_scale(d._timestamp_ms) + ")"; });
+  if (scrollTop_delta) {
+    // the calculation and setting of the new scrollTop value will have moved the log_entry_g's positions
+    // up or down the page. however we need the elements to appear to move from their previous position
+    // *on screen* to the new one to make the animation appear correct. so before we allow the transition
+    // to take place, we need to move log_entry_g's to a scrollTop-compensated position to get them back in
+    // their previous screen position.
+    // first we need to disable the transition because we want this move to happen invisibly (preferably don't
+    // want the uncompensated position to be rendered at all)
+    log_entry_g.style("transition", "none");
+    // now add the compensation
+    log_entry_g.style("transform", function(d, i, nodes) {
+      return "translate(0px, " + ((this._seqdia_y_translation || 0) + scrollTop_delta) + "px)";
+    });
+    // trick layout into being recalculated for these elements before we give them back their transition
+    log_entry_g.each(function () { window.getComputedStyle ( this ).transform });
+    // allow transition to return to its stylesheet-set value
+    log_entry_g.style("transition", null);
+  }
+
+  log_entry_g.style("transform", function(d, i, nodes) {
+    // make a easily readable memo of the current set value (parsing it back out from a translate() string
+    // is painful...)
+    this._seqdia_y_translation = y_scale(d._timestamp_ms);
+    return "translate(0px, " + this._seqdia_y_translation + "px)"; }
+  );
   log_entry_g.select(".duration")
     .style("display", function(d) { return logentry_get_duration(d) ? "inline" : "none"; })
     .filter(function(d) { return logentry_get_duration(d); })
-      .attr("transform", function(d, i, nodes) {
+      .style("transform", function(d, i, nodes) {
         return "translate(" + (
           (Math.ceil((nodes.length-1)/2) - i) * Math.min(main_rect_width/nodes.length, preferred_duration_spacing)
-        ) + ", " + (y_scale(logentry_get_start_time(d)) - y_scale(d._timestamp_ms)) + ")";
+        ) + "px, " + (y_scale(logentry_get_start_time(d)) - y_scale(d._timestamp_ms)) + "px)";
       })
       .select(".duration-v")
         .attr("y2", function(d) {
