@@ -222,7 +222,8 @@ duration_g_enter.append("line")
   .attr("class", "duration-v")
   .attr("x1", 0)
   .attr("y1", 0)
-  .attr("x2", 0);
+  .attr("x2", 0)
+  .attr("y2", 1);  // actual height will end up getting defined by a transform because that's transitionable
 
 log_entry_g_enter.append("rect").attr("class", "main-rect-fill")
   .attr("x", -main_rect_width/2)
@@ -321,8 +322,8 @@ var perform_updates = function (type_line_g, log_entry_g) {
         ) + "px, " + (y_scale(logentry_get_start_time(d)) - y_scale(d._timestamp_ms)) + "px)";
       })
       .select(".duration-v")
-        .attr("y2", function(d) {
-          return y_scale(d._timestamp_ms) - y_scale(logentry_get_start_time(d));
+        .style("transform", function(d) {
+          return "scale(1, " + (y_scale(d._timestamp_ms) - y_scale(logentry_get_start_time(d))) + ")";
         });
   log_entry_g.select(".severity-stripe")
     .attr("fill", function(d) {
