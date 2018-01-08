@@ -6,7 +6,7 @@ body {
   line-height: 0;
 }
 
-body > * {
+body > * > * {
   line-height: 1.2em;
 }
 
@@ -69,16 +69,26 @@ body > * {
   border: 1px solid black;
   box-sizing: border-box;
   border-radius: 3px;
+  width: 650px;
+}
+
+textarea {
+  width: 650px;
 }
 
 </style>
 <body>
-<svg class="legend"></svg>
-<div class="chart-container">
-  <svg class="chart"></svg>
+<div id="visualization">
+  <svg class="legend"></svg>
+  <div class="chart-container">
+    <svg class="chart"></svg>
+  </div>
 </div>
+<form id="src-data-form">
+  <textarea name="src-data-json" rows="20"></textarea>
+  <button type="submit">Update</button>
+</form>
 <script src="https://d3js.org/d3.v4.js" charset="utf-8"></script>
-<script src="log_data.jsonp" charset="utf-8"></script>
 <script>
 var logentry_get_duration = function (log_entry) {
   if (log_entry._source.requestTime != null) {
@@ -102,26 +112,7 @@ var type_sort_key = function (type_string) {
   }).join("-");
 }
 
-var logentry_get_start_time = function (log_entry) {
-  var duration = logentry_get_duration(log_entry);
-  return duration && log_entry._timestamp_ms - duration;
-};
-
-var logentry_get_earliest_time = function (log_entry) {
-  return logentry_get_start_time(log_entry) || log_entry._timestamp_ms;
-};
-
-
-var data = window.log_data.hits.hits;
-data.forEach(function (log_entry) {
-  log_entry["_timestamp_ms"] = (new Date(log_entry._source["@timestamp"])).getTime();
-});
-data.sort(function(a, b) {
-  return b._timestamp_ms - a._timestamp_ms;
-});
-var data_by_type = d3.nest().key(function(log_entry) { return log_entry._type; }).entries(data);
-
-data_by_type.sort(function (a, b) {
+var type_sort_comparator = function (a, b) {
   var sort_key_a = type_sort_key(a.key);
   var sort_key_b = type_sort_key(b.key);
   if (sort_key_a > sort_key_b) {
@@ -131,8 +122,19 @@ data_by_type.sort(function (a, b) {
   } else {
     return 0;
   }
-});
+};
 
+var logentry_get_start_time = function (log_entry) {
+  var duration = logentry_get_duration(log_entry);
+  return duration && log_entry._timestamp_ms - duration;
+};
+
+var logentry_get_earliest_time = function (log_entry) {
+  return logentry_get_start_time(log_entry) || log_entry._timestamp_ms;
+};
+
+var data;
+var data_by_type;
 var chart_margin = {top: 2, right: 0, bottom: 10, left: 32};
 var legend_margin = {top: 0, right: 0, bottom: 0, left: 32};
 var type_width = 96;
@@ -144,27 +146,18 @@ var get_inner_height = function() { return chart_height - (chart_margin.top + ch
 var preferred_duration_spacing = 6;
 var main_rect_width = 32;
 
-var y_scale = d3.scaleTime()
-  .domain([
-    d3.min(data, function(log_entry) { return logentry_get_earliest_time(log_entry)}),
-    d3.max(data, function(log_entry) { return log_entry._timestamp_ms})
-  ]).range([0, get_inner_height()]);
-var y_axis = d3.axisLeft(y_scale)
-  .tickSize(-get_inner_width());
+var y_scale = d3.scaleTime();
+var y_axis = d3.axisLeft(y_scale);
 
-var x_scale = d3.scaleOrdinal(data_by_type.map(function(d, i) { return (i+0.5) * type_width; }))
-  .domain(data_by_type.map(function(d, i) { return d.key; }));
-var x_axis_inner = d3.axisTop(x_scale);
-var x_axis_outer = d3.axisTop(x_scale).tickSize(0);
+var x_scale;
+var x_axis_inner;
+var x_axis_outer;
 
-var chart_container = d3.select(".chart-container")
-  .style("height", chart_container_height + "px")
-  .style("width", get_outer_width() + "px");
+var chart_container = d3.select(".chart-container");
 
 var chart = d3.select(".chart");
 var chart_inner = chart.append("g")
-  .attr("class", "chart-inner")
-  .style("transform", "translate(" + chart_margin.left + "px, " + chart_margin.top + "px)");
+  .attr("class", "chart-inner");
 var chart_x_axis = chart_inner.append("g")
   .attr("class", "axis x-axis");
 var chart_y_axis = chart_inner.append("g")
@@ -172,71 +165,11 @@ var chart_y_axis = chart_inner.append("g")
 var chart_data_area = chart_inner.append("g")
   .attr("class", "data-area");
 
-var legend = d3.select(".legend")
-  .attr("width", get_outer_width())
-  .attr("height", 32);
+var legend = d3.select(".legend");
 var legend_inner = legend.append("g")
-  .attr("class", "chart-inner")
-  .style("transform", "translate(" + legend_margin.left + "px, " + 32 + "px)");
+  .attr("class", "chart-inner");
 var legend_x_axis = legend_inner.append("g")
   .attr("class", "axis x-axis");
-
-chart_data_area.selectAll("g").data(data_by_type, function(type_group) { return type_group.key; }).enter().append("g")
-  .attr("class", "type-group");
-
-var log_entry_g_enter = chart_data_area.selectAll("g").selectAll("g.log-entry").data(
-  function(parent_datum) {
-    parent_datum.values.forEach(function(log_entry, i) { log_entry._order_in_type = i; });
-    return parent_datum.values;
-  },
-  function(log_entry) { return log_entry._id; }
-).enter().append("g")
-  .attr("class", "log-entry")
-  .on("mouseover", function() {
-    this.parentNode.appendChild(this);
-
-    var detail = d3.select("body").selectAll("pre.detail").data([d3.select(this).datum()]);
-    var detail_enter = detail.enter().append("pre").attr("class", "detail");
-    detail = detail_enter.merge(detail);
-    detail.text(function(d) { return JSON.stringify(d._source, null, 2); })
-      .style("width", (get_outer_width()-8) + "px");
-  })
-  .on("mouseleave", function() {
-    var order_in_type = d3.select(this).datum()._order_in_type;
-    if (order_in_type != null) {
-      this.parentNode.insertBefore(
-        this,
-        order_in_type >= this.parentNode.childNodes.length ? null : this.parentNode.childNodes[order_in_type]
-      );
-    }
-  });
-
-var duration_g_enter = log_entry_g_enter.append("g").attr("class", "duration");
-duration_g_enter.append("line")
-  .attr("class", "duration-h")
-  .attr("x1", -4)
-  .attr("y1", 0)
-  .attr("x2", 4)
-  .attr("y2", 0);
-duration_g_enter.append("line")
-  .attr("class", "duration-v")
-  .attr("x1", 0)
-  .attr("y1", 0)
-  .attr("x2", 0)
-  .attr("y2", 1);  // actual height will end up getting defined by a transform because that's transitionable
-
-log_entry_g_enter.append("rect").attr("class", "main-rect-fill")
-  .attr("x", -main_rect_width/2)
-  .attr("y", 0)
-  .attr("width", main_rect_width)
-  .attr("height", 8);
-log_entry_g_enter.append("rect").attr("class", "severity-stripe")
-  .attr("x", -main_rect_width/2)
-  .attr("y", 0)
-  .attr("width", 6)
-  .attr("height", 8);
-log_entry_g_enter.append("path").attr("class", "main-rect-stroke")
-  .attr("d", "M" + -((6+main_rect_width)/2) + ",0h" + (main_rect_width+6) + "M" + (main_rect_width/2) + ",0v8h" + -main_rect_width + "v-8");
 
 chart.on("wheel", function() {
   if (d3.event.ctrlKey) {
@@ -244,11 +177,107 @@ chart.on("wheel", function() {
 
     chart_height = Math.min(Math.max(chart_container_height, chart_height * Math.pow(2, -d3.event.deltaY/3)), chart_container_height*16); 
 
-    perform_updates();
+    zoom_updated();
   }
 });
 
-var perform_updates = function (type_line_g, log_entry_g) {
+var src_data_form = d3.select("#src-data-form")
+  .on("submit", function() {
+    d3.event.preventDefault();
+    var new_data = JSON.parse(this.elements["src-data-json"].value);
+    data = new_data.hits.hits
+    data_updated();
+  });
+
+var data_updated = function () {
+  data.forEach(function (log_entry) {
+    log_entry["_timestamp_ms"] = (new Date(log_entry._source["@timestamp"])).getTime();
+  });
+  data.sort(function(a, b) {
+    return b._timestamp_ms - a._timestamp_ms;
+  });
+  data_by_type = d3.nest().key(function(log_entry) { return log_entry._type; }).entries(data);
+  data_by_type.sort(type_sort_comparator);
+
+  y_scale.domain([
+    d3.min(data, function(log_entry) { return logentry_get_earliest_time(log_entry)}),
+    d3.max(data, function(log_entry) { return log_entry._timestamp_ms})
+  ]);
+  y_axis.tickSize(-get_inner_width());
+
+  x_scale = d3.scaleOrdinal(data_by_type.map(function(d, i) { return (i+0.5) * type_width; }))
+    .domain(data_by_type.map(function(d, i) { return d.key; }));
+  x_axis_inner = d3.axisTop(x_scale);
+  x_axis_outer = d3.axisTop(x_scale).tickSize(0);
+
+  chart_container.style("height", chart_container_height + "px")
+    .style("width", get_outer_width() + "px");
+  chart_inner.style("transform", "translate(" + chart_margin.left + "px, " + chart_margin.top + "px)");
+
+  legend.attr("width", get_outer_width())
+    .attr("height", 32);
+  legend_inner.style("transform", "translate(" + legend_margin.left + "px, " + 32 + "px)");
+
+  chart_data_area.selectAll("g.type-group").data(data_by_type, function(type_group) { return type_group.key; }).enter().append("g")
+    .attr("class", "type-group");
+
+  var log_entry_g_enter = chart_data_area.selectAll("g.type-group").selectAll("g.log-entry").data(
+    function(parent_datum) {
+      parent_datum.values.forEach(function(log_entry, i) { log_entry._order_in_type = i; });
+      return parent_datum.values;
+    },
+    function(log_entry) { return log_entry._id; }
+  ).enter().append("g")
+    .attr("class", "log-entry")
+    .on("mouseover", function() {
+      this.parentNode.appendChild(this);
+
+      var detail = d3.select("#visualization").selectAll("pre.detail").data([d3.select(this).datum()]);
+      var detail_enter = detail.enter().append("pre").attr("class", "detail");
+      detail = detail_enter.merge(detail);
+      detail.text(function(d) { return JSON.stringify(d._source, null, 2); });
+    })
+    .on("mouseleave", function() {
+      var order_in_type = d3.select(this).datum()._order_in_type;
+      if (order_in_type != null) {
+        this.parentNode.insertBefore(
+          this,
+          order_in_type >= this.parentNode.childNodes.length ? null : this.parentNode.childNodes[order_in_type]
+        );
+      }
+    });
+
+  var duration_g_enter = log_entry_g_enter.append("g").attr("class", "duration");
+  duration_g_enter.append("line")
+    .attr("class", "duration-h")
+    .attr("x1", -4)
+    .attr("y1", 0)
+    .attr("x2", 4)
+    .attr("y2", 0);
+  duration_g_enter.append("line")
+    .attr("class", "duration-v")
+    .attr("x1", 0)
+    .attr("y1", 0)
+    .attr("x2", 0)
+    .attr("y2", 1);  // actual height will end up getting defined by a transform because that's transitionable
+
+  log_entry_g_enter.append("rect").attr("class", "main-rect-fill")
+    .attr("x", -main_rect_width/2)
+    .attr("y", 0)
+    .attr("width", main_rect_width)
+    .attr("height", 8);
+  log_entry_g_enter.append("rect").attr("class", "severity-stripe")
+    .attr("x", -main_rect_width/2)
+    .attr("y", 0)
+    .attr("width", 6)
+    .attr("height", 8);
+  log_entry_g_enter.append("path").attr("class", "main-rect-stroke")
+    .attr("d", "M" + -((6+main_rect_width)/2) + ",0h" + (main_rect_width+6) + "M" + (main_rect_width/2) + ",0v8h" + -main_rect_width + "v-8");
+
+  zoom_updated();
+};
+
+var zoom_updated = function (type_line_g, log_entry_g) {
   var type_line_g = type_line_g || chart_data_area.selectAll("g.type-group");
   // remembering to do this nested select to get our grouping behaviour
   var log_entry_g = log_entry_g || chart_data_area.selectAll("g.type-group").selectAll("g.log-entry");
@@ -334,7 +363,6 @@ var perform_updates = function (type_line_g, log_entry_g) {
       }[d._source.levelname] || "transparent";
     });
 };
-perform_updates();
 
 </script>
 </body>
