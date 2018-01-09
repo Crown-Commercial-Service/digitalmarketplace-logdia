@@ -40,7 +40,7 @@ body > * > * {
 }
 
 * {
-  transition: transform 50ms linear;
+  transition: transform 100ms linear;
 }
 
 .chart .data-area .log-entry .main-rect-fill {
@@ -122,6 +122,36 @@ var type_sort_comparator = function (a, b) {
   } else {
     return 0;
   }
+};
+
+var log_level_name_color_function = function(log_level_name) {
+  return {
+    "DEBUG": "#bbbbbb",
+    "WARNING": "orange",
+    "ERROR": "red"
+  }[log_level_name];
+};
+
+var http_status_color_function = function(status) {
+  var status_string = status + "";
+  if (status_string.startsWith("3")) {
+    return "purple";
+  } else if (status_string.startsWith("4")) {
+    return "orange";
+  } else if (status_string.startsWith("5")) {
+    return "red";
+  }
+}
+
+var left_stripe_fill_function = function(d) {
+  return log_level_name_color_function(d._source.levelname) ||
+    http_status_color_function(d._source.status) ||
+    "transparent";
+};
+
+var right_stripe_fill_function = function(d) {
+  return http_status_color_function(d._source.api_status) ||
+    "transparent";
 };
 
 var logentry_get_start_time = function (log_entry) {
@@ -290,8 +320,13 @@ var data_updated = function () {
     .attr("y", 0)
     .attr("width", main_rect_width)
     .attr("height", 8);
-  log_entry_g_enter.append("rect").attr("class", "severity-stripe")
+  log_entry_g_enter.append("rect").attr("class", "left-stripe")
     .attr("x", -main_rect_width/2)
+    .attr("y", 0)
+    .attr("width", 6)
+    .attr("height", 8);
+  log_entry_g_enter.append("rect").attr("class", "right-stripe")
+    .attr("x", (main_rect_width/2)-6)
     .attr("y", 0)
     .attr("width", 6)
     .attr("height", 8);
@@ -307,6 +342,10 @@ var data_updated = function () {
       }
       return null;
     });
+  log_entry_g.select(".left-stripe")
+    .attr("fill", left_stripe_fill_function);
+  log_entry_g.select(".right-stripe")
+    .attr("fill", right_stripe_fill_function);
 
   zoom_updated();
 };
@@ -391,14 +430,6 @@ var zoom_updated = function (type_line_g, log_entry_g) {
         .style("transform", function(d) {
           return "scale(1, " + (y_scale(d._timestamp_ms) - y_scale(logentry_get_start_time(d))) + ")";
         });
-  log_entry_g.select(".severity-stripe")
-    .attr("fill", function(d) {
-      return {
-        "DEBUG": "#cccccc",
-        "WARNING": "orange",
-        "ERROR": "red"
-      }[d._source.levelname] || "transparent";
-    });
 };
 
 </script>
