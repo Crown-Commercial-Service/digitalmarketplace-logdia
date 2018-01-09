@@ -133,6 +133,11 @@ var logentry_get_earliest_time = function (log_entry) {
   return logentry_get_start_time(log_entry) || log_entry._timestamp_ms;
 };
 
+var mk_x_scale = function(nested_data) {
+  return d3.scaleOrdinal(nested_data.map(function(d, i) { return (i+0.5) * type_width; }))
+  .domain(nested_data.map(function(d, i) { return d.key; }));
+}
+
 // convert an svg transform= attribute into an inline css style (mainly involves adding "px" where necessary)
 var transform_to_style = function (selection) {
   selection.filter("[transform]").style("transform", function() {
@@ -157,7 +162,8 @@ var main_rect_width = 32;
 var y_scale = d3.scaleTime();
 var y_axis = d3.axisLeft(y_scale);
 
-var x_scale;
+var x_scale_inner;
+var x_scale_outer;
 var x_axis_inner;
 var x_axis_outer;
 
@@ -215,11 +221,12 @@ var data_updated = function () {
     d3.max(data, function(log_entry) { return log_entry._timestamp_ms})
   ]);
   y_axis.tickSize(-get_inner_width());
-
-  x_scale = d3.scaleOrdinal(data_by_type.map(function(d, i) { return (i+0.5) * type_width; }))
-    .domain(data_by_type.map(function(d, i) { return d.key; }));
-  x_axis_inner = d3.axisTop(x_scale);
-  x_axis_outer = d3.axisTop(x_scale).tickSize(0);
+  // it doesn't look like a scale can be shared between two axis - if you do, drawing one axis affects the other, so
+  // we have two "identical" x scales here
+  x_scale_inner = mk_x_scale(data_by_type);
+  x_scale_outer = mk_x_scale(data_by_type);
+  x_axis_inner = d3.axisTop(x_scale_inner);
+  x_axis_outer = d3.axisTop(x_scale_outer).tickSize(0);
 
   chart_container.style("height", chart_container_height + "px")
     .style("width", get_outer_width() + "px");
@@ -345,7 +352,7 @@ var zoom_updated = function (type_line_g, log_entry_g) {
   chart_y_axis.call(y_axis);
   transform_to_style(chart_y_axis.selectAll(".tick"));
 
-  type_line_g.style("transform", function(d) { return "translate(" + x_scale(d.key) + "px, 0px)"; });
+  type_line_g.style("transform", function(d) { return "translate(" + x_scale_inner(d.key) + "px, 0px)"; });
 
   if (scrollTop_delta) {
     // the calculation and setting of the new scrollTop value will have moved the log_entry_g's positions
