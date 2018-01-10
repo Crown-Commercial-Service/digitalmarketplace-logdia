@@ -81,7 +81,15 @@ textarea {
 <div id="visualization">
   <svg class="legend"></svg>
   <div class="chart-container">
-    <svg class="chart"></svg>
+    <svg class="chart">
+      <defs>
+        <filter y="-50%" height="200%" id="halo">
+          <feColorMatrix result="matrixOut" in="SourceAlpha" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.7 0"/>
+          <feMorphology in="matrixOut" result="morphOut" operator="dilate" radius="2" />
+          <feBlend in="SourceGraphic" in2="morphOut" mode="normal"/>
+        </filter>
+      </defs>
+    </svg>
   </div>
 </div>
 <form id="src-data-form">
@@ -233,6 +241,30 @@ var src_data_form = d3.select("#src-data-form")
     data_updated();
   });
 
+var update_highlight = function (type_group, new_highlight_id_array) {
+  var highlight_mirror = type_group.selectAll("g.highlight-mirror").data(
+    new_highlight_id_array,
+    // using a constant key function to trick d3 into always re-using the single existing .highlight-mirror
+    function() { return 1 }
+  );
+  highlight_mirror.exit().style("display", "none");
+  var highlight_mirror_enter = highlight_mirror.enter().append("g")
+    .attr("class", "highlight-mirror")
+    .on("mouseleave", function () {
+      // this event is occasionally missed, leaving a stale highlight mirror around
+      update_highlight(type_group, []);
+    });
+  if (!window.sidebar) {  // only firefox has this defined
+    // only apply filter to highlight if we know we're not firefox - it has a rendering bug
+    // causing the entire highlight to be invisible if filtered
+    highlight_mirror_enter.attr("filter", "url(#halo)");
+  }
+  highlight_mirror_enter.append("use");
+  highlight_mirror = highlight_mirror.merge(highlight_mirror);
+  highlight_mirror.style("display", "inline")
+    .select("use").attr("href", function(d) { return "#" + d; });
+};
+
 var data_updated = function () {
   data_multiple_request_ids = !data.every(function (log_entry) {
     return log_entry._source.requestId === data[0]._source.requestId;
@@ -268,10 +300,12 @@ var data_updated = function () {
 
   var type_group_g = chart_data_area.selectAll("g.type-group").data(data_by_type, function(type_group) { return type_group.key; });
   type_group_g.enter().append("g")
-    .attr("class", "type-group");
+    .attr("class", "type-group")
+    .append("g")
+      .attr("class", "log-entry-container");
   type_group_g.exit().remove();
 
-  var log_entry_g = chart_data_area.selectAll("g.type-group").selectAll("g.log-entry").data(
+  var log_entry_g = chart_data_area.selectAll("g.type-group").select(".log-entry-container").selectAll("g.log-entry").data(
     function(parent_datum) {
       parent_datum.values.forEach(function(log_entry, i) { log_entry._order_in_type = i; });
       return parent_datum.values;
@@ -280,23 +314,17 @@ var data_updated = function () {
   );
   var log_entry_g_enter = log_entry_g.enter().append("g")
     .attr("class", "log-entry")
+    .attr("id", function (log_entry) {
+      return "log-entry-" + log_entry._id;
+    })
     .on("mouseover", function() {
-      this.parentNode.appendChild(this);
+      update_highlight(d3.select(this.parentNode.parentNode), [this.id]);
 
       var detail = d3.select("#visualization").selectAll("pre.detail").data([d3.select(this).datum()]);
       var detail_enter = detail.enter().append("pre").attr("class", "detail");
       detail = detail_enter.merge(detail);
       detail.text(function(d) { return JSON.stringify(d._source, null, 2); });
     })
-    .on("mouseleave", function() {
-      var order_in_type = d3.select(this).datum()._order_in_type;
-      if (order_in_type != null) {
-        this.parentNode.insertBefore(
-          this,
-          order_in_type >= this.parentNode.childNodes.length ? null : this.parentNode.childNodes[order_in_type]
-        );
-      }
-    });
   log_entry_g.exit().remove();
   // set this back to the combined group
   log_entry_g = log_entry_g.merge(log_entry_g_enter);
@@ -338,7 +366,7 @@ var data_updated = function () {
       if (data_multiple_request_ids) {
         try {
           return d3.hsl(parseInt(d._source.requestId.substr(-2), 16), 0.7, 0.9).toString();
-        } catch (e if e instanceof TypeError) {}
+        } catch (e) {}
       }
       return null;
     });
@@ -367,7 +395,7 @@ var zoom_updated = function (type_line_g, log_entry_g) {
     var fixed_point_px;
     try {
       fixed_point_px = d3.mouse(chart_container.node())[1];
-    } catch (e if e instanceof TypeError) {
+    } catch (e) {
       fixed_point_px = chart_container_height/2;
     }
     var fixed_point_ts = y_scale.invert(original_scrollTop + fixed_point_px - chart_margin.top);
