@@ -227,7 +227,15 @@ chart.on("wheel", function() {
   if (d3.event.ctrlKey) {
     d3.event.preventDefault();
 
-    chart_height = Math.min(Math.max(chart_container_height, chart_height * Math.pow(2, -d3.event.deltaY/3)), chart_container_height*16); 
+    var deltaY_normalized = d3.event.deltaY * {
+      "0": 0.02,  // unit is pixels
+      "1": 1./3,  // unit is lines
+      "2": 1      // unit is pages
+                  // ^ of course, the above have no literal meaning when zooming, so we've just got to
+                  // weight them approximately
+    }[d3.event.deltaMode];
+
+    chart_height = Math.min(Math.max(chart_container_height, chart_height * Math.pow(2, -deltaY_normalized)), chart_container_height*16);
 
     zoom_updated();
   }
