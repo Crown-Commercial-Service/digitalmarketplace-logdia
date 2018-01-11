@@ -151,15 +151,19 @@ var http_status_color_function = function(status) {
   }
 }
 
-var left_stripe_fill_function = function(d) {
-  return log_level_name_color_function(d._source.levelname) ||
-    http_status_color_function(d._source.status) ||
+var left_stripe_fill_function = function(log_entry) {
+  return log_level_name_color_function(log_entry._source.levelname) ||
+    http_status_color_function(log_entry._source.status) ||
     "transparent";
 };
 
-var right_stripe_fill_function = function(d) {
-  return http_status_color_function(d._source.api_status) ||
+var right_stripe_fill_function = function(log_entry) {
+  return http_status_color_function(log_entry._source.api_status) ||
     "transparent";
+};
+
+var log_entry_g_id_function = function (log_entry) {
+  return "log-entry-" + log_entry._id;
 };
 
 var logentry_get_start_time = function (log_entry) {
@@ -249,28 +253,35 @@ var src_data_form = d3.select("#src-data-form")
     data_updated();
   });
 
-var update_highlight = function (type_group, new_highlight_id_array) {
-  var highlight_mirror = type_group.selectAll("g.highlight-mirror").data(
-    new_highlight_id_array,
-    // using a constant key function to trick d3 into always re-using the single existing .highlight-mirror
-    function() { return 1 }
+var highlights_updated = function () {
+  var highlight_g = chart_data_area.selectAll("g.type-group").select(".highlight-container").selectAll("g.highlight").data(
+    function(parent_datum) {
+      return parent_datum.highlight;
+    },
+    function(log_entry) { return log_entry._id; }
   );
-  highlight_mirror.exit().style("display", "none");
-  var highlight_mirror_enter = highlight_mirror.enter().append("g")
-    .attr("class", "highlight-mirror")
+  // rather than delete the highlight let's keep it around as it may be needed again
+  highlight_g.exit().style("display", "none");
+  var highlight_g_enter = highlight_g.enter().append("g")
+    .attr("class", "highlight")
     .on("mouseleave", function () {
       // this event is occasionally missed, leaving a stale highlight mirror around
-      update_highlight(type_group, []);
+      d3.select(this.parentNode).datum().highlight = [];
+      highlights_updated();
     });
   if (!window.sidebar) {  // only firefox has this defined
     // only apply filter to highlight if we know we're not firefox - it has a rendering bug
     // causing the entire highlight to be invisible if filtered
-    highlight_mirror_enter.attr("filter", "url(#halo)");
+    highlight_g_enter.attr("filter", "url(#halo)");
   }
-  highlight_mirror_enter.append("use");
-  highlight_mirror = highlight_mirror.merge(highlight_mirror);
-  highlight_mirror.style("display", "inline")
-    .select("use").attr("href", function(d) { return "#" + d; });
+  highlight_g_enter.append("use")
+    .attr("class", "highlight-mirror");
+  highlight_g_enter.append("line")
+    .attr("class", "time-line time-line-end");
+
+  highlight_g = highlight_g.merge(highlight_g_enter);
+  highlight_g.style("display", "inline")
+    .select("use").attr("href", function(log_entry) { return "#" + log_entry_g_id_function(log_entry); });
 };
 
 var data_updated = function () {
@@ -284,6 +295,9 @@ var data_updated = function () {
     return b._timestamp_ms - a._timestamp_ms;
   });
   data_by_type = d3.nest().key(function(log_entry) { return log_entry._type; }).entries(data);
+  data_by_type.forEach(function (type_group) {
+    type_group.highlight = [];
+  });
   data_by_type.sort(type_sort_comparator);
 
   y_scale.domain([
@@ -307,10 +321,12 @@ var data_updated = function () {
   legend_inner.style("transform", "translate(" + legend_margin.left + "px, " + 32 + "px)");
 
   var type_group_g = chart_data_area.selectAll("g.type-group").data(data_by_type, function(type_group) { return type_group.key; });
-  type_group_g.enter().append("g")
-    .attr("class", "type-group")
-    .append("g")
+  var type_group_g_enter = type_group_g.enter().append("g")
+    .attr("class", "type-group");
+  type_group_g_enter.append("g")
       .attr("class", "log-entry-container");
+  type_group_g_enter.append("g")
+      .attr("class", "highlight-container");
   type_group_g.exit().remove();
 
   var log_entry_g = chart_data_area.selectAll("g.type-group").select(".log-entry-container").selectAll("g.log-entry").data(
@@ -322,11 +338,10 @@ var data_updated = function () {
   );
   var log_entry_g_enter = log_entry_g.enter().append("g")
     .attr("class", "log-entry")
-    .attr("id", function (log_entry) {
-      return "log-entry-" + log_entry._id;
-    })
+    .attr("id", log_entry_g_id_function)
     .on("mouseover", function() {
-      update_highlight(d3.select(this.parentNode.parentNode), [this.id]);
+      d3.select(this.parentNode).datum().highlight = [d3.select(this).datum()];
+      highlights_updated();
 
       var detail = d3.select("#visualization").selectAll("pre.detail").data([d3.select(this).datum()]);
       var detail_enter = detail.enter().append("pre").attr("class", "detail");
