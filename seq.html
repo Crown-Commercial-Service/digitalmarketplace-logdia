@@ -375,6 +375,11 @@ var data_updated = function () {
       d3.select(this.parentNode).datum().highlight = [d3.select(this).datum()];
       highlights_updated();
 
+      var type_group_matcher = d3.matcher(".type-group");
+      var type_group_candidate = this
+      for (; !type_group_matcher.apply(type_group_candidate); type_group_candidate = type_group_candidate.parentNode) {};
+      type_group_candidate.parentNode.appendChild(type_group_candidate);
+
       var detail = d3.select("#visualization").selectAll("pre.detail").data([d3.select(this).datum()]);
       var detail_enter = detail.enter().append("pre").attr("class", "detail");
       detail = detail_enter.merge(detail);
