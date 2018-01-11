@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.chart line.type-line {
+  stroke: black;
+  stroke-width: 1px;
+}
+
+.chart text {
+  fill: black;
+  font: 10px sans-serif;
+  text-anchor: middle;
+}
+
+</style>
+<svg class="chart"></svg>
+<script src="https://d3js.org/d3.v4.js" charset="utf-8"></script>
+<script src="log_data.jsonp" charset="utf-8"></script>
+<script>
+var data = window.log_data.hits.hits;
+var data_by_type = d3.nest().key(function(log_entry) { return log_entry._type; }).entries(data);
+
+var margin = {top: 32, right: 32, bottom: 32, left: 32};
+var type_width = 96;
+var inner_width = type_width * data_by_type.length;
+var outer_width = inner_width + margin.left + margin.right;
+var outer_height = 500;
+var inner_height = outer_height - (margin.top + margin.bottom);
+
+var y_scale = d3.scaleLinear()
+  .domain(d3.extent(data, function(log_entry) { return log_entry.fields["@timestamp"][0]}))
+  .range([0, inner_height]);
+
+var x_scale = d3.scaleOrdinal(data_by_type.map(function(d, i) { return i * type_width; }))
+  .domain(data_by_type.map(function(d, i) { return d.key; }));
+
+var chart = d3.select(".chart")
+    .attr("width", outer_width)
+    .attr("height", outer_height)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+var type_line_g = chart.selectAll("g").data(data_by_type, function(type_group) { return type_group.key; });
+var type_line_g_enter = type_line_g.enter().append("g").attr("transform", function(d) { return "translate(" + x_scale(d.key) + ", 0)"; });
+
+type_line_g_enter.append("line")
+  .attr("class", "type-line")
+  .attr("x1", 0)
+  .attr("y1", 0)
+  .attr("x2", 0)
+  .attr("y2", inner_height)
+  .text(function(d) { return d.key; });
+
+var log_entry_g = chart.selectAll("g").selectAll("g").data(
+  function(parent_datum) { return parent_datum.values; },
+  function(log_entry) { return log_entry._id; }
+);
+var log_entry_g_enter = log_entry_g.enter().append("g").attr("transform", function(d, i) { return "translate(0, " + y_scale(d.fields["@timestamp"]) + ")"; });
+
+log_entry_g_enter.append("circle")
+  .attr("cx", 0)
+  .attr("cy", 0)
+  .attr("r", 4);
+
+</script>
