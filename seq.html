@@ -60,6 +60,12 @@ body > * > * {
   stroke-width: 2px;
 }
 
+.chart .data-area .highlight .time-line {
+  stroke: black;
+  stroke-width: 1px;
+  stroke-dasharray: 4px 2px;
+}
+
 .detail {
   display: block;
   white-space: pre-wrap;
@@ -187,6 +193,11 @@ var transform_to_style = function (selection) {
   }).attr("transform", null);
 };
 
+// "snap to pixel"
+var sp = function (value) {
+  return Math.round(value+0.5) - 0.5;
+}
+
 var data;
 var data_by_type;
 var data_multiple_request_ids;
@@ -276,12 +287,33 @@ var highlights_updated = function () {
   }
   highlight_g_enter.append("use")
     .attr("class", "highlight-mirror");
-  highlight_g_enter.append("line")
-    .attr("class", "time-line time-line-end");
+  highlight_g_enter.append("g")
+    .attr("class", "time-line-container time-line-container-end")
+    .append("line")
+      .attr("class", "time-line")
+      .attr("x1", -get_outer_width())
+      .attr("x2", get_outer_width());
+  highlight_g_enter.append("g")
+    .attr("class", "time-line-container time-line-container-start")
+    .append("line")
+      .attr("class", "time-line")
+      .attr("x1", -get_outer_width())
+      .attr("x2", get_outer_width());
 
   highlight_g = highlight_g.merge(highlight_g_enter);
   highlight_g.style("display", "inline")
     .select("use").attr("href", function(log_entry) { return "#" + log_entry_g_id_function(log_entry); });
+
+  highlight_g.select(".time-line-container-end").style("transform", function(log_entry) {
+    return "translate(0, " + sp(y_scale(log_entry._timestamp_ms)) + "px)";
+  });
+
+  highlight_g.select(".time-line-container-start").style("transform", function(log_entry) {
+    var start_time = logentry_get_start_time(log_entry);
+    return start_time && "translate(0, " + sp(y_scale(start_time)) + "px)";
+  }).style("display", function(log_entry) {
+    return logentry_get_start_time(log_entry) ? "inline" : "none";
+  });
 };
 
 var data_updated = function () {
@@ -458,7 +490,7 @@ var zoom_updated = function (type_line_g, log_entry_g) {
       return "translate(0px, " + ((this._seqdia_y_translation || 0) + scrollTop_delta) + "px)";
     });
     // trick layout into being recalculated for these elements before we give them back their transition
-    log_entry_g.each(function () { window.getComputedStyle ( this ).transform });
+    log_entry_g.each(function () { window.getComputedStyle(this).transform });
     // allow transition to return to its stylesheet-set value
     log_entry_g.style("transition", null);
   }
@@ -466,7 +498,7 @@ var zoom_updated = function (type_line_g, log_entry_g) {
   log_entry_g.style("transform", function(d, i, nodes) {
     // make a easily readable memo of the current set value (parsing it back out from a translate() string
     // is painful...)
-    this._seqdia_y_translation = y_scale(d._timestamp_ms);
+    this._seqdia_y_translation = sp(y_scale(d._timestamp_ms));
     return "translate(0px, " + this._seqdia_y_translation + "px)"; }
   );
   log_entry_g.select(".duration")
