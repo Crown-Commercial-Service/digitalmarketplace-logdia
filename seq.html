@@ -31,6 +31,11 @@ body > * > * {
   display: none;
 }
 
+.chart text {
+  font: 10px sans-serif;
+  fill: black;
+}
+
 .chart .y-axis .tick > line {
   opacity: 0.1;
 }
@@ -64,6 +69,15 @@ body > * > * {
   stroke: black;
   stroke-width: 1px;
   stroke-dasharray: 4px 2px;
+}
+
+.chart .data-area .highlight text.timestamp {
+  text-anchor: start;
+  font: 9px monospace;
+}
+
+.chart .data-area .highlight text.timestamp.right-half {
+  text-anchor: end;
 }
 
 .detail {
@@ -238,6 +252,10 @@ var legend_inner = legend.append("g")
 var legend_x_axis = legend_inner.append("g")
   .attr("class", "axis x-axis");
 
+var logentry_right_half = function(log_entry) {
+  return x_scale_inner(log_entry._type) > get_inner_width()/2;
+};
+
 chart.on("wheel", function() {
   if (d3.event.ctrlKey) {
     d3.event.preventDefault();
@@ -287,18 +305,27 @@ var highlights_updated = function () {
   }
   highlight_g_enter.append("use")
     .attr("class", "highlight-mirror");
-  highlight_g_enter.append("g")
-    .attr("class", "time-line-container time-line-container-end")
-    .append("line")
-      .attr("class", "time-line")
-      .attr("x1", -get_outer_width())
-      .attr("x2", get_outer_width());
-  highlight_g_enter.append("g")
-    .attr("class", "time-line-container time-line-container-start")
-    .append("line")
-      .attr("class", "time-line")
-      .attr("x1", -get_outer_width())
-      .attr("x2", get_outer_width());
+
+  var time_line_container_end_enter = highlight_g_enter.append("g")
+    .attr("class", "time-line-container time-line-container-end");
+  time_line_container_end_enter.append("line")
+    .attr("class", "time-line")
+    .attr("x1", -get_outer_width())
+    .attr("x2", get_outer_width());
+  time_line_container_end_enter.append("text")
+    .attr("class", "timestamp timestamp-end")
+    .attr("y", "1em");
+
+  var time_line_container_start_enter = highlight_g_enter.append("g")
+    .attr("class", "time-line-container time-line-container-start");
+  time_line_container_start_enter.append("line")
+    .attr("class", "time-line")
+    .attr("x1", -get_outer_width())
+    .attr("x2", get_outer_width());
+  time_line_container_start_enter.append("text")
+    .attr("class", "timestamp timestamp-start")
+    .attr("y", "1em");
+
 
   highlight_g = highlight_g.merge(highlight_g_enter);
   highlight_g.style("display", "inline")
@@ -314,6 +341,21 @@ var highlights_updated = function () {
   }).style("display", function(log_entry) {
     return logentry_get_start_time(log_entry) ? "inline" : "none";
   });
+
+  highlight_g.selectAll(".timestamp")
+    .style("transform", function (log_entry) {
+      return "translate(" + ((logentry_right_half(log_entry) ? -1 : 1) * main_rect_width) + "px, 0)";
+    })
+    .classed("right-half", logentry_right_half);
+
+  highlight_g.select(".timestamp-start")
+    .text(function (log_entry) {
+      return new Date(logentry_get_start_time(log_entry)).toISOString();
+    });
+  highlight_g.select(".timestamp-end")
+    .text(function (log_entry) {
+      return new Date(log_entry._timestamp_ms).toISOString();
+    });
 };
 
 var data_updated = function () {
@@ -518,6 +560,8 @@ var zoom_updated = function (type_line_g, log_entry_g) {
         .style("transform", function(d) {
           return "scale(1, " + (y_scale(d._timestamp_ms) - y_scale(logentry_get_start_time(d))) + ")";
         });
+
+  highlights_updated();
 };
 
 </script>
