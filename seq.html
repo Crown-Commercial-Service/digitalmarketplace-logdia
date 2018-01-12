@@ -104,7 +104,7 @@ textarea {
     <svg class="chart">
       <defs>
         <filter y="-50%" height="200%" id="halo">
-          <feColorMatrix result="matrixOut" in="SourceAlpha" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.7 0"/>
+          <feColorMatrix result="matrixOut" in="SourceAlpha" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.8 0"/>
           <feMorphology in="matrixOut" result="morphOut" operator="dilate" radius="2" />
           <feBlend in="SourceGraphic" in2="morphOut" mode="normal"/>
         </filter>
@@ -419,6 +419,11 @@ var data_updated = function () {
     .attr("class", "log-entry")
     .attr("id", log_entry_g_id_function)
     .on("mouseover", function() {
+      // for now, we're only showing one highlight at a time, so clear all others that might still be showing
+      data_by_type.forEach(function (type_group) {
+        type_group.highlight = [];
+      });
+
       d3.select(this.parentNode).datum().highlight = [d3.select(this).datum()];
       highlights_updated();
 
