@@ -323,8 +323,7 @@ var highlights_updated = function () {
     .attr("x1", -get_outer_width())
     .attr("x2", get_outer_width());
   time_line_container_start_enter.append("text")
-    .attr("class", "timestamp timestamp-start")
-    .attr("y", "1em");
+    .attr("class", "timestamp timestamp-start");
 
 
   highlight_g = highlight_g.merge(highlight_g_enter);
@@ -356,6 +355,12 @@ var highlights_updated = function () {
     .text(function (log_entry) {
       return new Date(log_entry._timestamp_ms).toISOString();
     });
+
+  // only put the "start" timestamp below the timeline if we think we've got enough space between the two timelines
+  highlight_g.select(".timestamp-start").attr("y", function (log_entry) {
+    var start_time = logentry_get_start_time(log_entry);
+    return start_time && sp(y_scale(log_entry._timestamp_ms)) - sp(y_scale(start_time)) < 20 ? "-0.3em" : "1em";
+  });
 };
 
 var data_updated = function () {
