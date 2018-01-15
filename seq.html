@@ -55,7 +55,7 @@ body > * > * {
 .chart .data-area .log-entry .main-rect-stroke {
   stroke: black;
   stroke-width: 1px;
-  stroke-linecap: butt;
+  stroke-linecap: square;
   stroke-linejoin: miter;
   fill: none;
 }
@@ -162,7 +162,9 @@ var log_level_name_color_function = function(log_level_name) {
 
 var http_status_color_function = function(status) {
   var status_string = status + "";
-  if (status_string.startsWith("3")) {
+  if (status_string.startsWith("2")) {
+    return "green";
+  } else if (status_string.startsWith("3")) {
     return "purple";
   } else if (status_string.startsWith("4")) {
     return "orange";
@@ -171,15 +173,39 @@ var http_status_color_function = function(status) {
   }
 }
 
-var left_stripe_fill_function = function(log_entry) {
-  return log_level_name_color_function(log_entry._source.levelname) ||
-    http_status_color_function(log_entry._source.status) ||
-    "transparent";
+var left_symbol_fill_function = function(log_entry) {
+  return http_status_color_function(log_entry._source.status) || null;
 };
 
-var right_stripe_fill_function = function(log_entry) {
-  return http_status_color_function(log_entry._source.api_status) ||
-    "transparent";
+var left_symbol_pathstr_function = function(log_entry) {
+  if (log_entry._source.request) {
+    var method_match = log_entry._source.request.match(/^([A-Z]+) .+$/);
+    if (method_match) {
+      if (method_match[1] === "POST") {
+        return "M1,1h-1q-1,-0.2 -1,-1q0,-0.8 1,-1h1z";
+      } else if (method_match[1] === "GET") {
+        return "M1,1h-1l-1,-1l1,-1h1z";
+      } else if (method_match[1] === "PUT") {
+        return "M1,1h-1v-0.6h-1v-0.8h1v-0.6h1z";
+      }
+    }
+  }
+};
+
+var right_symbol_fill_function = function(log_entry) {
+  return http_status_color_function(log_entry._source.api_status);
+};
+
+var right_symbol_pathstr_function = function(log_entry) {
+  if (log_entry._source.api_method) {
+    if (log_entry._source.api_method === "POST") {
+      return "M-1,-1h2Q0,-0.8 0,0Q0,0.8 1,1h-2z";
+    } else if (log_entry._source.api_method === "GET") {
+      return "M1,1h-2v-2h2l-1,1z";
+    } else if (log_entry._source.api_method === "PUT") {
+      return "M1,1h-2v-2h2v0.6h-1v0.8h1z";
+    }
+  }
 };
 
 var log_entry_g_id_function = function (log_entry) {
@@ -225,6 +251,7 @@ var chart_height = 500;
 var get_inner_height = function() { return chart_height - (chart_margin.top + chart_margin.bottom) };
 var preferred_duration_spacing = 6;
 var main_rect_width = 32;
+var main_rect_height = 8;
 
 var y_scale = d3.scaleTime();
 var y_axis = d3.axisLeft(y_scale);
@@ -459,19 +486,29 @@ var data_updated = function () {
     .attr("x", -main_rect_width/2)
     .attr("y", 0)
     .attr("width", main_rect_width)
-    .attr("height", 8);
-  log_entry_g_enter.append("rect").attr("class", "left-stripe")
-    .attr("x", -main_rect_width/2)
-    .attr("y", 0)
-    .attr("width", 6)
-    .attr("height", 8);
-  log_entry_g_enter.append("rect").attr("class", "right-stripe")
-    .attr("x", (main_rect_width/2)-6)
-    .attr("y", 0)
-    .attr("width", 6)
-    .attr("height", 8);
+    .attr("height", main_rect_height);
+  log_entry_g_enter.append("path").attr("class", "left-symbol")
+    .style("transform", "translate("
+      + (-(main_rect_width)/2) + "px, "
+      + (main_rect_height/2) + "px) scale("
+      + ((main_rect_height/2)+0.5)
+      + ", " + ((main_rect_height/2)+0.5) + ")"
+    );
+  log_entry_g_enter.append("path").attr("class", "right-symbol")
+    .style("transform", "translate("
+      + ((main_rect_width)/2) + "px, "
+      + (main_rect_height/2) + "px) scale("
+      + ((main_rect_height+1)/2) + ", "
+      + ((main_rect_height+1)/2) + ")"
+    );
   log_entry_g_enter.append("path").attr("class", "main-rect-stroke")
-    .attr("d", "M" + -((6+main_rect_width)/2) + ",0h" + (main_rect_width+6) + "M" + (main_rect_width/2) + ",0v8h" + -main_rect_width + "v-8");
+    .attr("d", "M" + -((main_rect_width-(main_rect_height+1))/2) + ",0h" + (main_rect_width-(main_rect_height+1)) + "M" + -((main_rect_width-(main_rect_height+1))/2) + "," + main_rect_height + "h" + (main_rect_width-(main_rect_height+1)));
+  var fallback_path_d = "M" + ((main_rect_width-(main_rect_height+1))/2) + ",0H" + main_rect_width/2 + "v" + main_rect_height + "H" + ((main_rect_width-(main_rect_height+1))/2);
+  log_entry_g_enter.append("path").attr("class", "main-rect-stroke symbol-fallback left-symbol-fallback")
+    .style("transform", "scale(-1,1)")
+    .attr("d", fallback_path_d);
+  log_entry_g_enter.append("path").attr("class", "main-rect-stroke symbol-fallback right-symbol-fallback")
+    .attr("d", fallback_path_d);
 
   log_entry_g.select(".main-rect-fill")
     .style("fill", function(d) {
@@ -482,10 +519,26 @@ var data_updated = function () {
       }
       return null;
     });
-  log_entry_g.select(".left-stripe")
-    .attr("fill", left_stripe_fill_function);
-  log_entry_g.select(".right-stripe")
-    .attr("fill", right_stripe_fill_function);
+  log_entry_g.select(".left-symbol")
+    .attr("fill", left_symbol_fill_function)
+    .attr("d", left_symbol_pathstr_function)
+    .style("display", function(log_entry) {
+      return left_symbol_fill_function(log_entry) && left_symbol_pathstr_function(log_entry) ? null : "none";
+    });
+  log_entry_g.select(".right-symbol")
+    .attr("fill", right_symbol_fill_function)
+    .attr("d", right_symbol_pathstr_function)
+    .style("display", function(log_entry) {
+      return right_symbol_fill_function(log_entry) && right_symbol_pathstr_function(log_entry) ? null : "none";
+    });
+  log_entry_g.select(".left-symbol-fallback")
+    .style("display", function(log_entry) {
+      return left_symbol_fill_function(log_entry) && left_symbol_pathstr_function(log_entry) ? "none" : null;
+    });
+  log_entry_g.select(".right-symbol-fallback")
+    .style("display", function(log_entry) {
+      return right_symbol_fill_function(log_entry) && right_symbol_pathstr_function(log_entry) ? "none" : null;
+    });
 
   zoom_updated();
 };
