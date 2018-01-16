@@ -162,14 +162,16 @@ var log_level_name_color_function = function(log_level_name) {
 
 var http_status_color_function = function(status) {
   var status_string = status + "";
-  if (status_string.startsWith("2")) {
-    return "green";
-  } else if (status_string.startsWith("3")) {
-    return "purple";
-  } else if (status_string.startsWith("4")) {
-    return "orange";
-  } else if (status_string.startsWith("5")) {
-    return "red";
+  if (/^\d{3}$/.test(status_string)) {
+    if (status_string.startsWith("2")) {
+      return "green";
+    } else if (status_string.startsWith("3")) {
+      return "purple";
+    } else if (status_string.startsWith("4")) {
+      return "orange";
+    } else if (status_string.startsWith("5")) {
+      return "red";
+    }
   }
 }
 
@@ -178,16 +180,19 @@ var left_symbol_fill_function = function(log_entry) {
 };
 
 var left_symbol_pathstr_function = function(log_entry) {
+  var methods = {
+    "POST": "M1,1h-1q-1,-0.2 -1,-1q0,-0.8 1,-1h1z",
+    "GET": "M1,1h-1l-1,-1l1,-1h1z",
+    "PUT": "M1,1h-1v-0.6h-1v-0.8h1v-0.6h1z"
+  };
+
+  if (log_entry._source.name === "app" && log_entry._source.method && methods.hasOwnProperty(log_entry._source.method)) {
+    return methods[log_entry._source.method];
+  }
   if (log_entry._source.request) {
     var method_match = log_entry._source.request.match(/^([A-Z]+) .+$/);
-    if (method_match) {
-      if (method_match[1] === "POST") {
-        return "M1,1h-1q-1,-0.2 -1,-1q0,-0.8 1,-1h1z";
-      } else if (method_match[1] === "GET") {
-        return "M1,1h-1l-1,-1l1,-1h1z";
-      } else if (method_match[1] === "PUT") {
-        return "M1,1h-1v-0.6h-1v-0.8h1v-0.6h1z";
-      }
+    if (method_match && methods.hasOwnProperty(method_match[1])) {
+      return methods[method_match[1]];
     }
   }
 };
@@ -206,6 +211,18 @@ var right_symbol_pathstr_function = function(log_entry) {
       return "M1,1h-2v-2h2v0.6h-1v0.8h1z";
     }
   }
+};
+
+var center_symbol_fill_function = function(log_entry) {
+  return {
+    "ERROR": "red",
+    "WARNING": "orange",
+    "DEBUG": "rgba(0.5,0.5,0.5,0.3)"
+  }[log_entry._source.levelname];
+};
+
+var center_symbol_pathstr_function = function(log_entry) {
+  return "M1.5,-1h1.5L-1.5,1h-1.5z";
 };
 
 var log_entry_g_id_function = function (log_entry) {
@@ -509,6 +526,12 @@ var data_updated = function () {
     .attr("d", fallback_path_d);
   log_entry_g_enter.append("path").attr("class", "main-rect-stroke symbol-fallback right-symbol-fallback")
     .attr("d", fallback_path_d);
+  log_entry_g_enter.append("path").attr("class", "center-symbol")
+    .style("transform", "translate(0, "
+      + (main_rect_height/2) + "px) scale("
+      + (main_rect_height/2)
+      + ", " + (main_rect_height/2) + ")"
+    );
 
   log_entry_g.select(".main-rect-fill")
     .style("fill", function(d) {
@@ -538,6 +561,12 @@ var data_updated = function () {
   log_entry_g.select(".right-symbol-fallback")
     .style("display", function(log_entry) {
       return right_symbol_fill_function(log_entry) && right_symbol_pathstr_function(log_entry) ? "none" : null;
+    });
+  log_entry_g.select(".center-symbol")
+    .attr("fill", center_symbol_fill_function)
+    .attr("d", center_symbol_pathstr_function)
+    .style("display", function(log_entry) {
+      return center_symbol_fill_function(log_entry) && center_symbol_pathstr_function(log_entry) ? null : "none";
     });
 
   zoom_updated();
