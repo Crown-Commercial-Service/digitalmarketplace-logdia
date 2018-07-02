@@ -183,7 +183,8 @@ var left_symbol_pathstr_function = function(log_entry) {
   var methods = {
     "POST": "M1,1h-1q-1,-0.2 -1,-1q0,-0.8 1,-1h1z",
     "GET": "M1,1h-1l-1,-1l1,-1h1z",
-    "PUT": "M1,1h-1v-0.6h-1v-0.8h1v-0.6h1z"
+    "PUT": "M1,1h-1v-0.6h-1v-0.8h1v-0.6h1z",
+    "PATCH": "M1,1h-1.5q0.5,-0.5 0,-1q-0.5,-0.5 0,-1h1.5z"
   };
 
   if (log_entry._source.name === "app" && log_entry._source.method && methods.hasOwnProperty(log_entry._source.method)) {
@@ -209,6 +210,8 @@ var right_symbol_pathstr_function = function(log_entry) {
       return "M1,1h-2v-2h2l-1,1z";
     } else if (log_entry._source.api_method === "PUT") {
       return "M1,1h-2v-2h2v0.6h-1v0.8h1z";
+    } else if (log_entry._source.api_method === "PATCH") {
+      return "M1,1h-2v-2h1.5q-0.5,0.5 0,1q0.5,0.5 0,1z";
     }
   }
 };
