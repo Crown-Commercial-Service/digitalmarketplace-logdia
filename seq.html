@@ -118,6 +118,13 @@ textarea {
 </form>
 <script src="https://d3js.org/d3.v4.js" charset="utf-8"></script>
 <script>
+// "mutators" being functions which get called with a selector of parameter-value elements
+// after a detail panel has been created, allowing it to make alterations to its display.
+// the main intention of these is to allow the code that does the backwards mapping from
+// style back to controlling parameter(s) to live next to the code that does the forward mapping -
+// that which changes logentry appearance based on parameters.
+var detail_value_mutators = [];
+
 var logentry_get_duration = function (log_entry) {
   if (log_entry._source.requestTime != null) {
     return log_entry._source.requestTime * 1000;
@@ -156,14 +163,6 @@ var type_sort_key = function (type_string) {
 
 var type_sort_comparator = comparator_from_sort_key(function(item) { return type_sort_key(item.key); });
 
-var log_level_name_color_function = function(log_level_name) {
-  return {
-    "DEBUG": "#bbbbbb",
-    "WARNING": "orange",
-    "ERROR": "red"
-  }[log_level_name];
-};
-
 var http_status_color_function = function(status) {
   var status_string = status + "";
   if (/^\d{3}$/.test(status_string)) {
@@ -182,6 +181,12 @@ var http_status_color_function = function(status) {
 var left_symbol_fill_function = function(log_entry) {
   return http_status_color_function(log_entry._source.status) || null;
 };
+detail_value_mutators.push(function(parameter_value) {
+  parameter_value.filter(function(d) { return d.key == "status"; }).select(".value-text")
+    .style("background-color", function(d) {
+      return left_symbol_fill_function(d.log_entry);
+    }).style("color", "white");
+});
 
 var left_symbol_pathstr_function = function(log_entry) {
   var methods = {
@@ -205,6 +210,12 @@ var left_symbol_pathstr_function = function(log_entry) {
 var right_symbol_fill_function = function(log_entry) {
   return http_status_color_function(log_entry._source.api_status);
 };
+detail_value_mutators.push(function(parameter_value) {
+  parameter_value.filter(function(d) { return d.key == "api_status"; }).select(".value-text")
+    .style("background-color", function(d) {
+      return right_symbol_fill_function(d.log_entry);
+    }).style("color", "white");
+});
 
 var right_symbol_pathstr_function = function(log_entry) {
   if (log_entry._source.api_method) {
@@ -241,6 +252,12 @@ var background_color_function = function(log_entry) {
     ).toString();
   } catch (e) {}
 };
+detail_value_mutators.push(function(parameter_value) {
+  parameter_value.filter(function(d) { return d.key == "requestId"; }).select(".value-text")
+    .style("background-color", function(d) {
+      return background_color_function(d.log_entry);
+    });
+});
 
 var log_entry_g_id_function = function (log_entry) {
   return "log-entry-" + log_entry._id;
@@ -271,6 +288,11 @@ var transform_to_style = function (selection) {
 var sp = function (value) {
   return Math.round(value+0.5) - 0.5;
 }
+
+var object_key_sort_key = function(item) {
+  return item.key;
+};
+var object_key_comparator = comparator_from_sort_key(object_key_sort_key);
 
 var data;
 var data_by_type;
@@ -485,18 +507,39 @@ var data_updated = function () {
         type_group.highlight = [];
       });
 
-      d3.select(this.parentNode).datum().highlight = [d3.select(this).datum()];
+      var d = d3.select(this).datum();
+
+      d3.select(this.parentNode).datum().highlight = [d];
       highlights_updated();
 
       var type_group_matcher = d3.matcher(".type-group");
-      var type_group_candidate = this
+      var type_group_candidate = this;
       for (; !type_group_matcher.apply(type_group_candidate); type_group_candidate = type_group_candidate.parentNode) {};
       type_group_candidate.parentNode.appendChild(type_group_candidate);
 
-      var detail = d3.select("#visualization").selectAll("pre.detail").data([d3.select(this).datum()]);
+      var detail = d3.select("#visualization").selectAll("pre.detail").data(
+        [d],
+        function(log_entry) { return log_entry._id; }
+      );
       var detail_enter = detail.enter().append("pre").attr("class", "detail");
+      detail.exit().remove();
       detail = detail_enter.merge(detail);
-      detail.text(function(d) { return JSON.stringify(d._source, null, 2); });
+
+      var datum_entries = d3.entries(d._source);
+      datum_entries.forEach(function(entry) { entry.log_entry = d; });
+      datum_entries.sort(object_key_comparator);
+      var parameter_row = detail.selectAll(".parameter-row").data(datum_entries);
+      var parameter_row_enter = parameter_row.enter().append("div").attr("class", "parameter-row");
+      parameter_row_enter.append("span").attr("class", "parameter-key").text(function(d) { return d.key + ": "; });
+      parameter_row_enter.append("span").attr("class", "parameter-value").append("span")
+        .attr("class", "value-text")
+        .text(function(d) { return d.value; });
+      parameter_row.exit().remove();
+      parameter_row = parameter_row_enter.merge(parameter_row);
+
+      detail_value_mutators.forEach(function(mutator) {
+        mutator(parameter_row.select(".parameter-value"));
+      });
     })
   log_entry_g.exit().remove();
   // set this back to the combined group
