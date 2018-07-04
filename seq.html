@@ -93,7 +93,7 @@ body > * > * {
 }
 
 .detail svg.right-symbol {
-  padding-left: 0.5em;
+  padding-left: 0.25em;
   vertical-align: -1px;
 }
 
@@ -291,6 +291,22 @@ var center_symbol_fill_function = function(log_entry) {
 var center_symbol_pathstr_function = function(log_entry) {
   return "M1.5,-1h1.5L-1.5,1h-1.5z";
 };
+detail_value_mutators.push(function(parameter_value) {
+  parameter_value.filter(function(d) {
+    return d.key == "levelname" && center_symbol_pathstr_function(d.log_entry) && center_symbol_fill_function(d.log_entry);
+  }).select(".right-symbol")
+    .attr("width", main_rect_width+2)
+    .attr("height", main_rect_height+2)
+    .select("path")
+      .style("transform", "translate("
+        + ((main_rect_width/2) + 1) + "px, "
+        + ((main_rect_height/2) + 1) + "px) "
+        + "scale("
+        + main_rect_height/2 + ", "
+        + main_rect_height/2 + ")"
+      ).attr("d", function(d) { return center_symbol_pathstr_function(d.log_entry); })
+      .attr("fill", function(d) { return center_symbol_fill_function(d.log_entry); });
+});
 
 var background_color_function = function(log_entry) {
   try {
