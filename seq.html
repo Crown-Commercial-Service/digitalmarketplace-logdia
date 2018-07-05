@@ -371,13 +371,19 @@ detail_value_mutators.push(
   function(parameter_value) {
     highlight_data_on_mouseover(
       parameter_value.filter(function(d) { return ["spanId", "childSpanId"].includes(d.key); }).select(".value-text"),
-      function(log_entry, d) { return log_entry._source.spanId === d.value }
+      function(log_entry, d) {
+        // only highlight if the requestId also matches
+        return log_entry._source.requestId === d.log_entry._source.requestId && log_entry._source.spanId === d.value;
+      }
     );
   },
   function(parameter_value) {
     highlight_data_on_mouseover(
       parameter_value.filter(function(d) { return d.key === "parentSpanId"; }).select(".value-text"),
-      function(log_entry, d) { return log_entry._source.spanId === d.value }
+      function(log_entry, d) {
+        // only highlight if the requestId also matches
+        return log_entry._source.requestId === d.log_entry._source.requestId && log_entry._source.spanId === d.value;
+      }
     );
     // TODO do something extra special to entries with childSpanId set to this value
   },
