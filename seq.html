@@ -85,7 +85,7 @@ body > * > * {
 }
 
 .chart.multiple-highlights .data-area .log-entry-container {
-  opacity: 0.35;
+  opacity: 0.25;
 }
 
 .detail {
@@ -169,6 +169,22 @@ var logentry_get_duration = function (log_entry) {
   return null;
 };
 
+var highlight_data_on_mouseover = function(selector, condition_function) {
+  selector.on("mouseover", function(d) {
+    data_by_type.forEach(function (type_group) {
+      type_group.highlight = type_group.values.filter(function(log_entry) {
+        return condition_function(log_entry, d);
+      });
+    });
+    highlights_updated();
+  }).on("mouseleave", function(d) {
+    data_by_type.forEach(function (type_group) {
+      type_group.highlight = [];
+    });
+    highlights_updated();
+  });
+};
+
 var comparator_from_sort_key = function(sort_key_fn) {
   return function (a, b) {
     var sort_key_a = sort_key_fn(a);
@@ -233,7 +249,7 @@ var left_symbol_fill_function = function(log_entry) {
   return http_status_color_function(log_entry._source.status) || null;
 };
 detail_value_mutators.push(function(parameter_value) {
-  parameter_value.filter(function(d) { return d.key == "status"; }).select(".value-text")
+  parameter_value.filter(function(d) { return d.key === "status"; }).select(".value-text")
     .style("background-color", function(d) {
       return left_symbol_fill_function(d.log_entry);
     }).style("color", "white");
@@ -274,7 +290,7 @@ var right_symbol_fill_function = function(log_entry) {
   return http_status_color_function(log_entry._source.api_status);
 };
 detail_value_mutators.push(function(parameter_value) {
-  parameter_value.filter(function(d) { return d.key == "api_status"; }).select(".value-text")
+  parameter_value.filter(function(d) { return d.key === "api_status"; }).select(".value-text")
     .style("background-color", function(d) {
       return right_symbol_fill_function(d.log_entry);
     }).style("color", "white");
@@ -294,7 +310,7 @@ var right_symbol_pathstr_function = function(log_entry) {
   }
 };
 detail_value_mutators.push(
-  get_small_right_symbol_detail_mutator(function(d) { return d.key == "api_method"; }, right_symbol_pathstr_function)
+  get_small_right_symbol_detail_mutator(function(d) { return d.key === "api_method"; }, right_symbol_pathstr_function)
 );
 
 var center_symbol_fill_function = function(log_entry) {
@@ -335,23 +351,34 @@ var background_color_function = function(log_entry) {
   } catch (e) {}
 };
 detail_value_mutators.push(function(parameter_value) {
-  parameter_value.filter(function(d) { return d.key == "requestId"; }).select(".value-text")
-    .style("background-color", function(d) {
-      return background_color_function(d.log_entry);
-    }).on("mouseover", function(d) {
-      data_by_type.forEach(function (type_group) {
-        type_group.highlight = type_group.values.filter(function (log_entry) {
-          return log_entry._source.requestId === d.value;
-        });
-      });
-      highlights_updated();
-    }).on("mouseleave", function(d) {
-      data_by_type.forEach(function (type_group) {
-        type_group.highlight = [];
-      });
-      highlights_updated();
-    });
+  var target_selection = parameter_value.filter(function(d) { return d.key === "requestId"; }).select(".value-text");
+  target_selection.style("background-color", function(d) {
+    return background_color_function(d.log_entry);
+  });
+  highlight_data_on_mouseover(target_selection, function(log_entry, d) { return log_entry._source.requestId === d.value });
 });
+
+detail_value_mutators.push(
+  function(parameter_value) {
+    highlight_data_on_mouseover(
+      parameter_value.filter(function(d) { return ["spanId", "childSpanId"].includes(d.key); }).select(".value-text"),
+      function(log_entry, d) { return log_entry._source.spanId === d.value }
+    );
+  },
+  function(parameter_value) {
+    highlight_data_on_mouseover(
+      parameter_value.filter(function(d) { return d.key === "parentSpanId"; }).select(".value-text"),
+      function(log_entry, d) { return log_entry._source.spanId === d.value }
+    );
+    // TODO do something extra special to entries with childSpanId set to this value
+  },
+  function(parameter_value) {
+    highlight_data_on_mouseover(
+      parameter_value.filter(function(d) { return d.key === "instance_id"; }).select(".value-text"),
+      function(log_entry, d) { return log_entry._source.instance_id === d.value }
+    );
+  }
+);
 
 var log_entry_g_id_function = function (log_entry) {
   return "log-entry-" + log_entry._id;
