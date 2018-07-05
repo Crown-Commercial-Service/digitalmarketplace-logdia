@@ -386,6 +386,12 @@ detail_value_mutators.push(
       parameter_value.filter(function(d) { return d.key === "instance_id"; }).select(".value-text"),
       function(log_entry, d) { return log_entry._source.instance_id === d.value }
     );
+  },
+  function(parameter_value) {
+    highlight_data_on_mouseover(
+      parameter_value.filter(function(d) { return d.key === "remoteHost"; }).select(".value-text"),
+      function(log_entry, d) { return log_entry._source.remoteHost === d.value }
+    );
   }
 );
 
