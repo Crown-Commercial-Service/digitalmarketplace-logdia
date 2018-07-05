@@ -109,6 +109,15 @@ body > * > * {
   font-weight: bold;
 }
 
+.detail .parameter-row a.with-mouseover {
+  text-decoration: underline dashed rgba(0,0,0,0.35);
+  cursor: default;
+}
+
+.detail .parameter-row a.with-mouseover:hover {
+  text-decoration-color: initial;
+}
+
 .detail svg.right-symbol {
   padding-left: 0.25em;
   vertical-align: -1px;
@@ -170,7 +179,7 @@ var logentry_get_duration = function (log_entry) {
 };
 
 var highlight_data_on_mouseover = function(selector, condition_function) {
-  selector.on("mouseover", function(d) {
+  selector.classed("with-mouseover", true).on("mouseover", function(d) {
     data_by_type.forEach(function (type_group) {
       type_group.highlight = type_group.values.filter(function(log_entry) {
         return condition_function(log_entry, d);
