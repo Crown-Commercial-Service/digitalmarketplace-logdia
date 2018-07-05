@@ -80,6 +80,14 @@ body > * > * {
   text-anchor: end;
 }
 
+.chart.multiple-highlights .data-area .highlight .time-line-container {
+  display: none;
+}
+
+.chart.multiple-highlights .data-area .log-entry-container {
+  opacity: 0.35;
+}
+
 .detail {
   display: block;
   white-space: pre-wrap;
@@ -440,6 +448,13 @@ var src_data_form = d3.select("#src-data-form")
   });
 
 var highlights_updated = function () {
+  var total_highlights = data_by_type.map(function(type_group) {
+    return type_group.highlight.length;
+  }).reduce(function(a, b) {
+    return a + b;
+  });
+  chart.classed("multiple-highlights", total_highlights > 1);
+
   var highlight_g = chart_data_area.selectAll("g.type-group").select(".highlight-container").selectAll("g.highlight").data(
     function(parent_datum) {
       return parent_datum.highlight;
@@ -455,11 +470,6 @@ var highlights_updated = function () {
       d3.select(this.parentNode).datum().highlight = [];
       highlights_updated();
     });
-  if (!window.sidebar) {  // only firefox has this defined
-    // only apply filter to highlight if we know we're not firefox - it has a rendering bug
-    // causing the entire highlight to be invisible if filtered
-    highlight_g_enter.attr("filter", "url(#halo)");
-  }
   highlight_g_enter.append("use")
     .attr("class", "highlight-mirror");
 
@@ -495,7 +505,7 @@ var highlights_updated = function () {
     var start_time = logentry_get_start_time(log_entry);
     return start_time && "translate(0, " + sp(y_scale(start_time)) + "px)";
   }).style("display", function(log_entry) {
-    return logentry_get_start_time(log_entry) ? "inline" : "none";
+    return logentry_get_start_time(log_entry) ? null : "none";
   });
 
   highlight_g.selectAll(".timestamp")
@@ -562,7 +572,11 @@ var data_updated = function () {
   type_group_g_enter.append("g")
       .attr("class", "log-entry-container");
   type_group_g_enter.append("g")
-      .attr("class", "highlight-container");
+      .attr("class", "highlight-container")
+      // only apply filter to highlights if we know we're not firefox - it has a rendering bug
+      // causing the entire highlight to be invisible if filtered. only firefox has window.sidebar
+      // defined
+      .style("filter", window.sidebar ? "none" : "url(#halo)");
   type_group_g.exit().remove();
 
   var log_entry_g = chart_data_area.selectAll("g.type-group").select(".log-entry-container").selectAll("g.log-entry").data(
