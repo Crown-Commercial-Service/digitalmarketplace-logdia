@@ -338,6 +338,18 @@ detail_value_mutators.push(function(parameter_value) {
   parameter_value.filter(function(d) { return d.key == "requestId"; }).select(".value-text")
     .style("background-color", function(d) {
       return background_color_function(d.log_entry);
+    }).on("mouseover", function(d) {
+      data_by_type.forEach(function (type_group) {
+        type_group.highlight = type_group.values.filter(function (log_entry) {
+          return log_entry._source.requestId === d.value;
+        });
+      });
+      highlights_updated();
+    }).on("mouseleave", function(d) {
+      data_by_type.forEach(function (type_group) {
+        type_group.highlight = [];
+      });
+      highlights_updated();
     });
 });
 
@@ -620,7 +632,7 @@ var data_updated = function () {
       var parameter_row_enter = parameter_row.enter().append("div").attr("class", "parameter-row");
       parameter_row_enter.append("span").attr("class", "parameter-key").text(function(d) { return d.key + ": "; });
       var parameter_row_value_enter = parameter_row_enter.append("span").attr("class", "parameter-value");
-      parameter_row_value_enter.append("span")
+      parameter_row_value_enter.append("a")
         .attr("class", "value-text")
         .text(function(d) { return d.value; });
       parameter_row_value_enter.append("svg")
