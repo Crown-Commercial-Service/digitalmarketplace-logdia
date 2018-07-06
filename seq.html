@@ -84,7 +84,7 @@ body > * > * {
   display: none;
 }
 
-.chart.multiple-highlights .data-area .log-entry-container {
+.chart.highlights .data-area .log-entry-container {
   opacity: 0.25;
 }
 
@@ -514,6 +514,7 @@ var highlights_updated = function () {
     return a + b;
   });
   chart.classed("multiple-highlights", total_highlights > 1);
+  chart.classed("highlights", total_highlights > 0);
 
   var highlight_g = chart_data_area.selectAll("g.type-group").select(".highlight-container").selectAll("g.highlight").data(
     function(parent_datum) {
