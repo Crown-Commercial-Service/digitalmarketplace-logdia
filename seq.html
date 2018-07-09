@@ -169,6 +169,9 @@ textarea {
 var detail_value_mutators = [];
 
 var logentry_get_duration = function (log_entry) {
+  if (log_entry._source.duration_real != null) {
+    return log_entry._source.duration_real * 1000;
+  }
   if (log_entry._source.requestTime != null) {
     return log_entry._source.requestTime * 1000;
   }
