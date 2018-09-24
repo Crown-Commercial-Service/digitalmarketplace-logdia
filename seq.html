@@ -275,7 +275,7 @@ var left_symbol_pathstr_function = function(log_entry) {
     "PATCH": "M1,1h-1.5q0.5,-0.5 0,-1q-0.5,-0.5 0,-1h1.5z"
   };
 
-  if (log_entry._source.name === "app" && log_entry._source.method && methods.hasOwnProperty(log_entry._source.method)) {
+  if (log_entry._source.name === "flask.app" && log_entry._source.method && methods.hasOwnProperty(log_entry._source.method)) {
     return methods[log_entry._source.method];
   }
   if (log_entry._source.request) {
@@ -288,7 +288,7 @@ var left_symbol_pathstr_function = function(log_entry) {
 detail_value_mutators.push(
   get_small_right_symbol_detail_mutator(
     function(d) {
-      if (d.log_entry._source.name === "app" && d.log_entry._source.method) {
+      if (d.log_entry._source.name === "flask.app" && d.log_entry._source.method) {
         return d.key === "method";
       } else {
         return d.key === "request" && left_symbol_pathstr_function(d.log_entry);
