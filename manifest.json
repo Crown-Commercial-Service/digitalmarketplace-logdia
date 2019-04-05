@@ -1,0 +1,29 @@
+{
+  "manifest_version": 2,
+  "name": "digitalmarketplace-logdia",
+  "version": "0.1",
+
+  "description": "Allows 1-click log diagram generation directly from kibana",
+
+  "icons": {
+    "48": "icon48.svg"
+  },
+
+  "page_action": {
+    "default_icon": "icon48.svg",
+    "default_title": "Generate logdia from log entries in this view"
+  },
+
+  "background": {
+    "scripts": ["background.js"]
+  },
+
+  "permissions": [
+    "https://kibana.logit.io/*",
+    "webNavigation"
+  ],
+
+  "web_accessible_resources": [
+    "xhr-monkeypatcher.js"
+  ]
+}
