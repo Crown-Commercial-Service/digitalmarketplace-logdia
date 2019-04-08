@@ -3,6 +3,7 @@
 }:
 let
   stagingDir = pkgs.linkFarm "digitalmarketplace-logdia-stagingdir" ((map (s: { name = s; path = ./. + ("/" + s); }) [
+    "default.nix"  # include self in archive for transparency purposes
     "background.js"
     "icon48.svg"
     "index.html"
