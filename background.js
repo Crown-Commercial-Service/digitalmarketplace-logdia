@@ -22,14 +22,14 @@ browser.pageAction.onClicked.addListener((tab) => {
   browser.tabs.executeScript(tab.id, {"code": `(() => {
     if (window.latest_es_response) {
       try {
-        response_json = JSON.parse(window.latest_es_response);
+        response_json = window.latest_es_response.responses.map(response => JSON.parse(response)["responses"][0]);
       } catch (e) {
         window.alert("Sniffed data couldn't be parsed as JSON. Perhaps we sniffed the wrong thing?");
         return;
       }
 
       try {
-        var len = response_json["responses"][0]["hits"]["hits"].length;
+        var len = response_json.map(r => r["hits"]["hits"].length).reduce((a, b) => a + b);
         if (len === 0) {
           window.alert("No log entries in this dataset. Can't diagram.");
           return;
@@ -37,7 +37,7 @@ browser.pageAction.onClicked.addListener((tab) => {
           len < 100
           || window.confirm("This dataset consists of " + len + " log entries. Are you sure you want to diagram it?")
         ) {
-          return response_json["responses"][0];
+          return response_json;
         }
       } catch (e) {
         window.alert("Sniffed data wasn't in expected format. Perhaps we sniffed the wrong thing?");
@@ -49,25 +49,36 @@ browser.pageAction.onClicked.addListener((tab) => {
       browser.tabs.create({
         "url": "/index.html"
       }).then((tab) => {
-        browser.tabs.executeScript(tab.id, {
-          "code": `(() => {
-            document.querySelector("#src-data-form").elements["src-data-json"].value = JSON.stringify(${JSON.stringify(response_data[0])});
-          })();`,
-        });
+        browser.tabs.sendMessage(
+          tab.id,
+          {setSrcDataJson: JSON.stringify(response_data[0])}
+        );
       });
     }
   });
 });
 
 browser.webNavigation.onDOMContentLoaded.addListener((details) => {
+  browser.tabs.executeScript(details.tabId, {file: "browser-polyfill.js"});
   browser.tabs.executeScript(details.tabId, {
     "code": `(() => {
       // set up content-script to maintain this easily accessible copy of most recently retrieved es response
       // based on custom events sent by the page script
       window.latest_es_response = null;
       document.addEventListener("kibanaesresponse", (event) => {
-        if (event.detail != null) {
-          window.latest_es_response = event.detail;
+        if (event.detail && event.detail.response) {
+          // we use the second line of the request as a "characteristic string" in an attempt to identify responses
+          // that are part of the same query. if the characteristic string matches that of the existing es response
+          // we've stored, we simply append it. else we completely replace it.
+          var request_cstr = (event.detail.request || "").split("\\n", 2)[1] || "";
+          if (window.latest_es_response && window.latest_es_response.request_cstr === request_cstr) {
+            window.latest_es_response.responses.push(event.detail.response);
+          } else {
+            window.latest_es_response = {
+              "request_cstr": request_cstr,
+              "responses": [event.detail.response]
+            };
+          }
         }
       });
 

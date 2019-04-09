@@ -343,7 +343,10 @@ var src_data_form = d3.select("#src-data-form")
   .on("submit", function() {
     d3.event.preventDefault();
     var new_data = JSON.parse(this.elements["src-data-json"].value);
-    data = new_data.hits.hits
+    if (!Array.isArray(new_data)) {
+      new_data = [new_data];
+    }
+    data = new_data.map(results => results.hits.hits).reduce((a, b) => a.concat(b));
     data_updated();
   });
 
@@ -708,3 +711,19 @@ var zoom_updated = function (type_line_g, log_entry_g) {
 
   highlights_updated();
 };
+
+if (window.browser || (window.chrome && window.chrome.runtime && window.chrome.runtime.id)) {
+  // we're running as an extension and should listen for messages (once we've included the browser polyfill)
+  var s = document.createElement('script');
+  s.src = "browser-polyfill.js";
+  s.onload = function() {
+    browser.runtime.onMessage.addListener(request => {
+      if (request && request.setSrcDataJson) {
+        src_data_form.node().elements["src-data-json"].value = request.setSrcDataJson;
+        src_data_form.node().submit();
+        return Promise.resolve({response: "srcDataJsonSet"});
+      }
+    });
+  };
+  (document.head || document.documentElement).appendChild(s);
+}
