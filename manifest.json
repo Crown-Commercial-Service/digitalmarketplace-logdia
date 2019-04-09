@@ -16,7 +16,10 @@
   },
 
   "background": {
-    "scripts": ["background.js"]
+    "scripts": [
+      "browser-polyfill.js",
+      "background.js"
+     ]
   },
 
   "permissions": [
@@ -25,6 +28,7 @@
   ],
 
   "web_accessible_resources": [
-    "xhr-monkeypatcher.js"
+    "xhr-monkeypatcher.js",
+    "browser-polyfill.js"
   ]
 }
