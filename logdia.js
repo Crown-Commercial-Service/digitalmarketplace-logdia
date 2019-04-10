@@ -720,7 +720,9 @@ if (window.browser || (window.chrome && window.chrome.runtime && window.chrome.r
     browser.runtime.onMessage.addListener(request => {
       if (request && request.setSrcDataJson) {
         src_data_form.node().elements["src-data-json"].value = request.setSrcDataJson;
-        src_data_form.node().submit();
+        // going on to programmatically submit the form doesn't seem to work. i invite anyone wishing to
+        // fix this to make an attempt. very weird stuff going on with the submit event.
+        // src_data_form.node().submit();
         return Promise.resolve({response: "srcDataJsonSet"});
       }
     });

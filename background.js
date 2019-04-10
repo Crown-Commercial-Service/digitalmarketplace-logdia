@@ -18,9 +18,9 @@ browser.tabs.onUpdated.addListener((id, changeInfo, tab) => {
   updatePageAction(tab);
 });
 
-browser.pageAction.onClicked.addListener((tab) => {
-  browser.tabs.executeScript(tab.id, {"code": `(() => {
-    if (window.latest_es_response) {
+browser.pageAction.onClicked.addListener((launching_tab) => {
+  browser.tabs.executeScript(launching_tab.id, {"code": `(() => {
+    if (window.latest_es_response && Array.isArray(window.latest_es_response.responses)) {
       try {
         response_json = window.latest_es_response.responses.map(response => JSON.parse(response)["responses"][0]);
       } catch (e) {
@@ -43,16 +43,36 @@ browser.pageAction.onClicked.addListener((tab) => {
         window.alert("Sniffed data wasn't in expected format. Perhaps we sniffed the wrong thing?");
         return;
       }
+    } else {
+      window.alert("Couldn't find sniffed data to generate diagram with.");
     }
   })();`}).then((response_data) => {
     if (response_data[0] != null) {
       browser.tabs.create({
         "url": "/index.html"
-      }).then((tab) => {
-        browser.tabs.sendMessage(
-          tab.id,
-          {setSrcDataJson: JSON.stringify(response_data[0])}
-        );
+      }).then((logdia_tab) => {
+        var timed_out = false;
+        setTimeout(() => {
+            timed_out = true;
+        }, 1000);
+
+        var send_message = () => {
+          if (timed_out) {
+            browser.tabs.executeScript(launching_tab.id, {
+              "code": `window.alert("Wasn't able to communicate with new logdia tab within a reasonable time. Giving up.");`
+            });
+          } else {
+            browser.tabs.sendMessage(
+              logdia_tab.id,
+              {setSrcDataJson: JSON.stringify(response_data[0])}
+            ).then((message) => {
+              if (!(message && message.response === "srcDataJsonSet")) {
+                send_message();
+              }
+            }).catch(send_message);
+          }
+        };
+        send_message();
       });
     }
   });
