@@ -33,7 +33,7 @@
 
   "web_accessible_resources": [
     "xhr-monkeypatcher.js",
-    "browser-polyfill.js"
+    "browser-polyfill.js",
     "icons/*"
   ]
 }
