@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "digitalmarketplace-logdia",
   "homepage_url": "https://github.com/alphagov/digitalmarketplace-logdia",
-  "version": "0.5",
+  "version": "0.6",
 
   "description": "Allows 1-click log diagram generation directly from kibana",
 
