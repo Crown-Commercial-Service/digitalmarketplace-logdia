@@ -52,6 +52,6 @@ in rec {
     buildInputs = [ pkgs.zip ];
   } ''
     pushd ${stagingDir}
-    zip $out *
+    zip -r $out *
   '';
 }
