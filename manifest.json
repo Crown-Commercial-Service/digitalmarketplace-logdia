@@ -7,11 +7,15 @@
   "description": "Allows 1-click log diagram generation directly from kibana",
 
   "icons": {
-    "48": "icon48.svg"
+    "16": "icons/digitalmarketplace-logdia-16.png",
+    "19": "icons/digitalmarketplace-logdia-19.png",
+    "24": "icons/digitalmarketplace-logdia-24.png",
+    "38": "icons/digitalmarketplace-logdia-38.png",
+    "48": "icons/digitalmarketplace-logdia-48.png"
   },
 
   "page_action": {
-    "default_icon": "icon48.svg",
+    "default_icon": "icons/digitalmarketplace-logdia-38.png",
     "default_title": "Generate logdia from log entries in this view"
   },
 
@@ -30,5 +34,6 @@
   "web_accessible_resources": [
     "xhr-monkeypatcher.js",
     "browser-polyfill.js"
+    "icons/*"
   ]
 }
