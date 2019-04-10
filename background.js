@@ -82,6 +82,18 @@ browser.webNavigation.onDOMContentLoaded.addListener((details) => {
   browser.tabs.executeScript(details.tabId, {file: "browser-polyfill.js"});
   browser.tabs.executeScript(details.tabId, {
     "code": `(() => {
+      var request_characteristic_string = request_body => {
+        try {
+          // while it's not guaranteed that a JSON.parse -> JSON.stringify will result in a deterministic key order,
+          // it does seem to. revisit if this causes trouble.
+          var decoded = JSON.parse(request_body.split("\\n", 2)[1]);
+          decoded["size"] = null;  // size can genuinely vary between requests for the same kibana query. nullify it.
+          return JSON.stringify(decoded);
+        } catch (e) {
+          return null;
+        }
+      };
+
       // set up content-script to maintain this easily accessible copy of most recently retrieved es response
       // based on custom events sent by the page script
       window.latest_es_response = null;
@@ -90,14 +102,16 @@ browser.webNavigation.onDOMContentLoaded.addListener((details) => {
           // we use the second line of the request as a "characteristic string" in an attempt to identify responses
           // that are part of the same query. if the characteristic string matches that of the existing es response
           // we've stored, we simply append it. else we completely replace it.
-          var request_cstr = (event.detail.request || "").split("\\n", 2)[1] || "";
-          if (window.latest_es_response && window.latest_es_response.request_cstr === request_cstr) {
-            window.latest_es_response.responses.push(event.detail.response);
-          } else {
-            window.latest_es_response = {
-              "request_cstr": request_cstr,
-              "responses": [event.detail.response]
-            };
+          var request_cstr = request_characteristic_string(event.detail.request || "");
+          if (request_cstr !== null) {
+            if (window.latest_es_response && window.latest_es_response.request_cstr === request_cstr) {
+              window.latest_es_response.responses.push(event.detail.response);
+            } else {
+              window.latest_es_response = {
+                "request_cstr": request_cstr,
+                "responses": [event.detail.response]
+              };
+            }
           }
         }
       });
