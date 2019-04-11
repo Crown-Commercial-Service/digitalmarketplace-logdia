@@ -1,23 +1,3 @@
-function updatePageAction(tab) {
-  browser.tabs.executeScript(tab.id, {"code": "1"}).then(() => {
-    browser.pageAction.show(tab.id);
-  }).catch(() => {
-    browser.pageAction.hide(tab.id);
-  });
-}
-
-// call updatePageAction for all tabs on each load
-browser.tabs.query({}).then((tabs) => {
-  for (let tab of tabs) {
-    updatePageAction(tab);
-  }
-});
-
-// call updatePageAction when tabs are updated
-browser.tabs.onUpdated.addListener((id, changeInfo, tab) => {
-  updatePageAction(tab);
-});
-
 browser.pageAction.onClicked.addListener((launching_tab) => {
   browser.tabs.executeScript(launching_tab.id, {"code": `(() => {
     if (window.latest_es_response && Array.isArray(window.latest_es_response.responses)) {
@@ -79,54 +59,62 @@ browser.pageAction.onClicked.addListener((launching_tab) => {
 });
 
 browser.webNavigation.onDOMContentLoaded.addListener((details) => {
-  browser.tabs.executeScript(details.tabId, {file: "browser-polyfill.js"});
-  browser.tabs.executeScript(details.tabId, {
-    "code": `(() => {
-      var request_characteristic_string = request_body => {
-        try {
-          // while it's not guaranteed that a JSON.parse -> JSON.stringify will result in a deterministic key order,
-          // it does seem to. revisit if this causes trouble.
-          var decoded = JSON.parse(request_body.split("\\n", 2)[1]);
-          decoded["size"] = null;  // size can genuinely vary between requests for the same kibana query. nullify it.
-          return JSON.stringify(decoded);
-        } catch (e) {
-          return null;
-        }
-      };
+  // check we actually have access to this tab by executing a small test script
+  browser.tabs.executeScript(details.tabId, {"code": "1"}).then(() => {
+    // seems to have worked - set up page
+    browser.pageAction.show(details.tabId);
+    browser.tabs.executeScript(details.tabId, {file: "browser-polyfill.js"});
+    browser.tabs.executeScript(details.tabId, {
+      "code": `(() => {
+        var request_characteristic_string = request_body => {
+          try {
+            // while it's not guaranteed that a JSON.parse -> JSON.stringify will result in a deterministic key order,
+            // it does seem to. revisit if this causes trouble.
+            var decoded = JSON.parse(request_body.split("\\n", 2)[1]);
+            decoded["size"] = null;  // size can genuinely vary between requests for the same kibana query. nullify it.
+            return JSON.stringify(decoded);
+          } catch (e) {
+            return null;
+          }
+        };
 
-      // set up content-script to maintain this easily accessible copy of most recently retrieved es response
-      // based on custom events sent by the page script
-      window.latest_es_response = null;
-      document.addEventListener("kibanaesresponse", (event) => {
-        if (event.detail && event.detail.response) {
-          // we use the second line of the request as a "characteristic string" in an attempt to identify responses
-          // that are part of the same query. if the characteristic string matches that of the existing es response
-          // we've stored, we simply append it. else we completely replace it.
-          var request_cstr = request_characteristic_string(event.detail.request || "");
-          if (request_cstr !== null) {
-            if (window.latest_es_response && window.latest_es_response.request_cstr === request_cstr) {
-              window.latest_es_response.responses.push(event.detail.response);
-            } else {
-              window.latest_es_response = {
-                "request_cstr": request_cstr,
-                "responses": [event.detail.response]
-              };
+        // set up content-script to maintain this easily accessible copy of most recently retrieved es response
+        // based on custom events sent by the page script
+        window.latest_es_response = null;
+        document.addEventListener("kibanaesresponse", (event) => {
+          if (event.detail && event.detail.response) {
+            // we use the second line of the request as a "characteristic string" in an attempt to identify responses
+            // that are part of the same query. if the characteristic string matches that of the existing es response
+            // we've stored, we simply append it. else we completely replace it.
+            var request_cstr = request_characteristic_string(event.detail.request || "");
+            if (request_cstr !== null) {
+              if (window.latest_es_response && window.latest_es_response.request_cstr === request_cstr) {
+                window.latest_es_response.responses.push(event.detail.response);
+              } else {
+                window.latest_es_response = {
+                  "request_cstr": request_cstr,
+                  "responses": [event.detail.response]
+                };
+              }
             }
           }
-        }
-      });
+        });
 
-      // set up our XMLHttpRequest monkeypatcher to run in page-context
-      var s = document.createElement('script');
-      s.src = "${browser.runtime.getURL('xhr-monkeypatcher.js')}";
-      s.onload = function() {
-        // tidy ourselves up - no need to be left around
-        this.remove();
-      };
-      (document.head || document.documentElement).appendChild(s);
-    })();`,
-    "runAt": "document_end"
-  })
+        // set up our XMLHttpRequest monkeypatcher to run in page-context
+        var s = document.createElement('script');
+        s.src = "${browser.runtime.getURL('xhr-monkeypatcher.js')}";
+        s.onload = function() {
+          // tidy ourselves up - no need to be left around
+          this.remove();
+        };
+        (document.head || document.documentElement).appendChild(s);
+      })();`,
+      "runAt": "document_end"
+    });
+  }).catch(() => {
+    // we might not have permission to access this page? hide page action and fail gracefully...
+    browser.pageAction.hide(details.tabId);
+  });
 }, {
   "url": [{"urlPrefix": "https://kibana.logit.io/"}]
 });
