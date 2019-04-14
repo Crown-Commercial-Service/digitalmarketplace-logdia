@@ -342,6 +342,14 @@ chart.on("wheel", function() {
 var src_data_form = d3.select("#src-data-form")
   .on("submit", function() {
     d3.event.preventDefault();
+    d3.select(this).dispatch("pseudosubmit");
+  })
+  // submit events dispatched as a result of an extension message don't seem to be
+  // cancelable, or perhaps are operating in xray mode. either way, putting the update
+  // logic in a submit handler makes it hard to trigger from certain contexts. so put
+  // logic in "pseudosubmit" handler which can be triggered directly from these contexts.
+  .on("pseudosubmit", function() {
+    d3.event.preventDefault();
     var new_data = JSON.parse(this.elements["src-data-json"].value);
     if (!Array.isArray(new_data)) {
       new_data = [new_data];
@@ -720,9 +728,8 @@ if (window.browser || (window.chrome && window.chrome.runtime && window.chrome.r
     browser.runtime.onMessage.addListener(request => {
       if (request && request.setSrcDataJson) {
         src_data_form.node().elements["src-data-json"].value = request.setSrcDataJson;
-        // going on to programmatically submit the form doesn't seem to work. i invite anyone wishing to
-        // fix this to make an attempt. very weird stuff going on with the submit event.
-        // src_data_form.node().submit();
+        // actual submit events generated in this context don't appear to be cancelable
+        src_data_form.dispatch("pseudosubmit");
         return Promise.resolve({response: "srcDataJsonSet"});
       }
     });
