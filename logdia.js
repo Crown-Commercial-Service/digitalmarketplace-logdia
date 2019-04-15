@@ -106,6 +106,7 @@ detail_value_mutators.push(function(parameter_value) {
 
 var left_symbol_pathstr_function = function(log_entry) {
   var methods = {
+    "DELETE": "M1,1h-1v-0.8l-0.7,0.5v-1.4l0.7,0.5v-0.8h1z",
     "POST": "M1,1h-1q-1,-0.2 -1,-1q0,-0.8 1,-1h1z",
     "GET": "M1,1h-1l-1,-1l1,-1h1z",
     "PUT": "M1,1h-1v-0.6h-1v-0.8h1v-0.6h1z",
@@ -147,7 +148,9 @@ detail_value_mutators.push(function(parameter_value) {
 
 var right_symbol_pathstr_function = function(log_entry) {
   if (log_entry._source.api_method) {
-    if (log_entry._source.api_method === "POST") {
+    if (log_entry._source.api_method === "DELETE") {
+      return "M1,1h-2v-2h2v0.8l-0.7,-0.5v1.4l0.7,-0.5z";
+    } else if (log_entry._source.api_method === "POST") {
       return "M-1,-1h2Q0,-0.8 0,0Q0,0.8 1,1h-2z";
     } else if (log_entry._source.api_method === "GET") {
       return "M1,1h-2v-2h2l-1,1z";
